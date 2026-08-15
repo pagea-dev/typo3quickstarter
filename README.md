@@ -4,6 +4,8 @@ One-command bash script that spins up disposable TYPO3 instances on [DDEV](https
 
 Built because roughly half of all TYPO3 sites out there are still running on old major versions — this makes it trivial to spin up several versions side by side and see what actually changed.
 
+![typo3quickstarter demo](demo.gif)
+
 ## Why
 
 - **One command, zero clicking through the install wizard.** No more re-typing DB credentials or admin passwords by hand.
