@@ -16,7 +16,7 @@ Usage: typo3-ddev-setup.sh --v=<version> [options]
        typo3-ddev-setup.sh --cleanup [--path=DIR]
 
 Options:
-  --v=N                   TYPO3 major version to install (currently supported: 12, 13, 14;
+  --v=N                   TYPO3 major version to install (currently supported: 11, 12, 13, 14;
                           defaults to the highest supported version if omitted)
   --name=NAME             DDEV project name (default: auto-generated, e.g. typo3-v12-a1b2)
   --path=DIR              Directory the project folder is created in / scanned in for --cleanup (default: current dir)
@@ -180,7 +180,7 @@ fi
 
 # --- Version map --------------------------------------------------------
 # Ordered lowest to highest. Add further versions here once verified with this script.
-SUPPORTED_VERSIONS=(12 13 14)
+SUPPORTED_VERSIONS=(11 12 13 14)
 
 if [[ -z "$T3_VERSION" ]]; then
   T3_VERSION="${SUPPORTED_VERSIONS[${#SUPPORTED_VERSIONS[@]}-1]}"
@@ -188,6 +188,10 @@ if [[ -z "$T3_VERSION" ]]; then
 fi
 
 case "$T3_VERSION" in
+  11)
+    PHP_VERSION="8.1"
+    COMPOSER_CONSTRAINT="^11.5"
+    ;;
   12)
     PHP_VERSION="8.2"
     COMPOSER_CONSTRAINT="^12.4"
@@ -245,21 +249,47 @@ ddev start
 ddev composer create "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------
-ddev exec ./vendor/bin/typo3 setup \
-  --driver=mysqli \
-  --host=db \
-  --port=3306 \
-  --dbname=db \
-  --username=db \
-  --password=db \
-  --admin-username="$ADMIN_USER" \
-  --admin-user-password="$ADMIN_PASSWORD" \
-  --admin-email="$ADMIN_EMAIL" \
-  --project-name="$PROJECT_NAME" \
-  --server-type=other \
-  --create-site="https://${PROJECT_NAME}.ddev.site/" \
-  --no-interaction \
-  --force
+if [[ "$T3_VERSION" -eq 11 ]]; then
+  # TYPO3 v11's native `typo3 setup` command crashes on fresh CLI installs
+  # (GeneralUtility::$container is null when DataHandler touches the reference
+  # index while creating the admin user - see https://forge.typo3.org/issues/105452).
+  # v11 is EOL and this was closed as won't-fix, so use the legacy typo3-console
+  # installer instead, which doesn't have this bug.
+  ddev exec ./vendor/bin/typo3cms --no-ansi --no-interaction install:setup \
+    --force \
+    --database-driver=mysqli \
+    --database-user-name=db \
+    --database-user-password=db \
+    --database-host-name=db \
+    --database-port=3306 \
+    --database-name=db \
+    --use-existing-database \
+    --admin-user-name="$ADMIN_USER" \
+    --admin-password="$ADMIN_PASSWORD" \
+    --site-name="$PROJECT_NAME" \
+    --site-setup-type=site \
+    --site-base-url="https://${PROJECT_NAME}.ddev.site/"
+  # install:setup has no --admin-email flag, so set it separately.
+  ADMIN_EMAIL_ESCAPED="${ADMIN_EMAIL//\'/\'\'}"
+  ADMIN_USER_ESCAPED="${ADMIN_USER//\'/\'\'}"
+  ddev mysql -e "UPDATE be_users SET email='${ADMIN_EMAIL_ESCAPED}' WHERE username='${ADMIN_USER_ESCAPED}';"
+else
+  ddev exec ./vendor/bin/typo3 setup \
+    --driver=mysqli \
+    --host=db \
+    --port=3306 \
+    --dbname=db \
+    --username=db \
+    --password=db \
+    --admin-username="$ADMIN_USER" \
+    --admin-user-password="$ADMIN_PASSWORD" \
+    --admin-email="$ADMIN_EMAIL" \
+    --project-name="$PROJECT_NAME" \
+    --server-type=other \
+    --create-site="https://${PROJECT_NAME}.ddev.site/" \
+    --no-interaction \
+    --force
+fi
 
 # --- Credentials file ---------------------------------------------------------
 # Written at the project root (outside the "public" docroot) so it's never web-accessible.

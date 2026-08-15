@@ -82,9 +82,12 @@ Currently supported TYPO3 versions:
 
 | `--v` | PHP | Composer constraint |
 |---|---|---|
+| 11 | 8.1 | `^11.5` |
 | 12 | 8.2 | `^12.4` |
 | 13 | 8.3 | `^13.4` |
 | 14 | 8.4 | `^14.3` |
+
+> **v11 note:** TYPO3 v11's native `typo3 setup` CLI command crashes on fresh installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). For `--v=11` the script automatically falls back to the legacy `typo3cms install:setup` installer instead, which doesn't have this bug.
 
 ### Cleaning up
 
