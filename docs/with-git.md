@@ -9,7 +9,7 @@ After the instance is fully set up (right before the "Done" summary), asks what 
 ```
 ==> --with-git: what should be put under version control?
   1) The whole TYPO3 project
-  2) A new extension only (scaffolded fresh under packages/<name>)
+  2) A new extension only (via the TYPO3 extension kickstarter)
 Choice [1/2]:
 ```
 
@@ -30,6 +30,17 @@ If git isn't configured with a `user.name`/`user.email` yet, the repository is s
 
 ## Option 2: a new extension only
 
-Prompts for an extension key (lowercase, e.g. `my_extension`), then scaffolds a bare-minimum extension under `packages/<key>` - just a `composer.json` (package name `local/<key-with-dashes>`, PSR-4 autoloading under `Local\<StudlyCaseKey>\`) and an `ext_emconf.php`. Registers it as a Composer path repository, requires it at `:@dev`, and runs `extension:setup` so it's active - the same mechanics as `--extension`, minus needing an existing extension to point at.
+Rather than hand-rolling a scaffold, this installs and runs [friendsoftypo3/kickstarter](https://github.com/FriendsOfTYPO3/kickstarter) - the community/FriendsOfTYPO3 extension kickstarter - and hands control to its own interactive `make:extension` wizard:
 
-`git init` then runs inside `packages/<key>` itself, not the project root - so the extension gets its own independent history, ready to be pushed to its own repository later, while the rest of the TYPO3 instance around it stays a disposable throwaway.
+```bash
+==> Installing friendsoftypo3/kickstarter (dev dependency)
+==> Launching the TYPO3 extension kickstarter - follow the prompts
+```
+
+Requires TYPO3 12+ (the kickstarter has no TYPO3 11 release - `--with-git` skips this option with a note if the instance is v11). Installed as a `--dev` Composer requirement, since it's a scaffolding tool, not something the resulting extension needs at runtime. Composer resolves whichever kickstarter release matches the installed core automatically (`^0.1` for TYPO3 12, `^0.3` for TYPO3 13, `^0.4`+ for TYPO3 14) - no version needs pinning by hand.
+
+Before launching it, the kickstarter's own `exportDirectory` setting (extension key `ext_kickstarter` - its composer.json still carries the pre-FriendsOfTYPO3-adoption name `stefanfroemken/ext-kickstarter`) is set to `packages/` in `settings.php`, matching what its own README recommends for Composer setups - its default, `typo3temp/ext-kickstarter/`, is regenerable scratch space, not somewhere you'd want to keep real extension code.
+
+There's no non-interactive flag on `make:extension` - it only knows how to ask, so whatever extension key/vendor/namespace you give it during the wizard is what you get. Since there's no other way to learn what it created, `packages/` is diffed before and after the wizard runs to find the new directory. Once found, it's registered with Composer exactly like `--extension` registers a mounted one (path repository + `require ...:@dev` + `extension:setup`), and `git init` runs inside that extension's own directory - not the project root - so it gets its own independent history from the start, ready to be pushed to its own repository later, while the rest of the instance around it stays a disposable throwaway.
+
+If the wizard is cancelled, fails, or its result can't be identified (e.g. it created more than one new directory), nothing is registered or versioned - you'd need to sort out `packages/` and run `git init` there yourself.

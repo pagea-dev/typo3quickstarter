@@ -800,85 +800,74 @@ if [[ "$WITH_GIT" -eq 1 ]]; then
       echo "${C_YELLOW}Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged.${C_RESET}"
     fi
   elif [[ "$GIT_CHOICE" == "2" ]]; then
-    EXT_KEY=""
-    while [[ -z "$EXT_KEY" ]]; do
-      read -rp "Extension key (lowercase, e.g. my_extension): " EXT_KEY
-      if [[ ! "$EXT_KEY" =~ ^[a-z][a-z0-9_]*$ ]]; then
-        echo "${C_RED}Invalid extension key - must start with a lowercase letter, and contain only lowercase letters, digits, underscores.${C_RESET}"
-        EXT_KEY=""
-      fi
-    done
+    # friendsoftypo3/kickstarter has no TYPO3 11 release (0.1.x targets ^12.4.8,
+    # up to 0.4.x/main targeting ^14) - see https://github.com/FriendsOfTYPO3/kickstarter.
+    if [[ "$T3_MAJOR" -eq 11 ]]; then
+      echo "${C_YELLOW}--with-git: the TYPO3 extension kickstarter needs TYPO3 12+ (this instance is TYPO3 11), skipping.${C_RESET}"
+    else
+      echo "${C_CYAN}==> Installing friendsoftypo3/kickstarter (dev dependency)${C_RESET}"
+      if ddev composer require --dev friendsoftypo3/kickstarter --no-interaction --no-security-blocking; then
+        ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
 
-    EXT_DIR="packages/${EXT_KEY}"
-    if [[ -e "$EXT_DIR" ]]; then
-      echo "${C_RED}Error: ${EXT_DIR} already exists.${C_RESET}" >&2
-      exit 1
-    fi
-    mkdir -p "$EXT_DIR"
+        mkdir -p packages
+        # Point the kickstarter at packages/ instead of its typo3temp/ext-kickstarter/
+        # default - its own README recommends this for Composer setups, since
+        # typo3temp/ is regenerable/untracked scratch space, not real project code.
+        # Extension key is "ext_kickstarter", not "kickstarter" - the composer.json
+        # inside the friendsoftypo3/kickstarter package itself still says
+        # stefanfroemken/ext-kickstarter (its pre-adoption name).
+        ddev exec --raw php -r '
+            $file = $argv[1];
+            $config = require $file;
+            $config["EXTENSIONS"]["ext_kickstarter"]["exportDirectory"] = "packages/";
+            file_put_contents($file, "<?php\nreturn " . var_export($config, true) . ";\n");
+        ' "$SETTINGS_FILE"
 
-    # Composer package name: dashes instead of underscores, standard TYPO3 convention.
-    EXT_PACKAGE="local/${EXT_KEY//_/-}"
-    # PSR-4 namespace: StudlyCase from the snake_case key (my_extension -> MyExtension).
-    EXT_NAMESPACE=""
-    IFS='_' read -ra EXT_WORDS <<< "$EXT_KEY"
-    for word in "${EXT_WORDS[@]}"; do
-      EXT_NAMESPACE+="${word^}"
-    done
+        # No flag/non-interactive mode exists for make:extension - it only knows
+        # how to ask. Diff packages/ before and after to find what it created,
+        # since there's no other way to learn the extension key it was given.
+        EXT_DIRS_BEFORE="$(find packages -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)"
+        echo "${C_CYAN}==> Launching the TYPO3 extension kickstarter - follow the prompts${C_RESET}"
+        if ddev exec ./vendor/bin/typo3 make:extension; then
+          EXT_DIRS_AFTER="$(find packages -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)"
+          NEW_EXT_DIR="$(comm -13 <(echo "$EXT_DIRS_BEFORE") <(echo "$EXT_DIRS_AFTER"))"
 
-    cat > "${EXT_DIR}/composer.json" <<EOF
-{
-    "name": "${EXT_PACKAGE}",
-    "type": "typo3-cms-extension",
-    "description": "",
-    "license": "GPL-2.0-or-later",
-    "require": {
-        "typo3/cms-core": "${COMPOSER_CONSTRAINT}"
-    },
-    "extra": {
-        "typo3/cms": {
-            "extension-key": "${EXT_KEY}"
-        }
-    },
-    "autoload": {
-        "psr-4": {
-            "Local\\\\${EXT_NAMESPACE}\\\\": "Classes/"
-        }
-    }
-}
-EOF
+          if [[ -z "$NEW_EXT_DIR" ]] || [[ "$(wc -l <<< "$NEW_EXT_DIR")" -ne 1 ]]; then
+            echo "${C_YELLOW}Could not tell which extension the kickstarter created - nothing to put under git, check packages/ and run 'git init' there yourself if you want one.${C_RESET}"
+          else
+            # Same registration --extension already does for a mounted extension:
+            # a Composer path repository, then require it at :@dev.
+            package_name="$(
+              ddev exec --raw php -r '
+                  $composer = json_decode(file_get_contents($argv[1]), true);
+                  echo $composer["name"] ?? "";
+              ' "${NEW_EXT_DIR}/composer.json"
+            )"
+            if [[ -n "$package_name" ]]; then
+              echo "${C_CYAN}==> Registering ${NEW_EXT_DIR} (${package_name}) with Composer${C_RESET}"
+              ddev composer config "repositories.$(basename "$NEW_EXT_DIR")" path "$NEW_EXT_DIR"
+              ddev composer require "${package_name}:@dev" --no-interaction --no-security-blocking
+              ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
+            fi
 
-    cat > "${EXT_DIR}/ext_emconf.php" <<EOF
-<?php
-
-\$EM_CONF[\$_EXTKEY] = [
-    'title' => '${EXT_KEY}',
-    'description' => '',
-    'category' => 'plugin',
-    'state' => 'alpha',
-    'version' => '1.0.0',
-    'constraints' => [
-        'depends' => [
-            'typo3' => '${COMPOSER_CONSTRAINT#^}',
-        ],
-    ],
-];
-EOF
-
-    echo "${C_CYAN}==> Registering new extension ${EXT_KEY} (${EXT_PACKAGE})${C_RESET}"
-    ddev composer config "repositories.${EXT_KEY}" path "$EXT_DIR"
-    ddev composer require "${EXT_PACKAGE}:@dev" --no-interaction --no-security-blocking
-    ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
-
-    (
-      cd "$EXT_DIR"
-      git init >/dev/null
-      git add -A
-      if git commit -m "Initial commit" >/dev/null 2>&1; then
-        echo "${C_GREEN}Git repository initialized and committed at ${PROJECT_DIR}/${EXT_DIR}${C_RESET}"
+            (
+              cd "$NEW_EXT_DIR"
+              git init >/dev/null
+              git add -A
+              if git commit -m "Initial commit" >/dev/null 2>&1; then
+                echo "${C_GREEN}Git repository initialized and committed at ${PROJECT_DIR}/${NEW_EXT_DIR}${C_RESET}"
+              else
+                echo "${C_YELLOW}Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged.${C_RESET}"
+              fi
+            )
+          fi
+        else
+          echo "${C_YELLOW}Kickstarter run failed or was cancelled - nothing to put under git.${C_RESET}"
+        fi
       else
-        echo "${C_YELLOW}Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged.${C_RESET}"
+        echo "${C_YELLOW}Could not install friendsoftypo3/kickstarter, skipping.${C_RESET}"
       fi
-    )
+    fi
   else
     echo "${C_YELLOW}--with-git: invalid choice, skipping.${C_RESET}"
   fi
