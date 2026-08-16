@@ -12,6 +12,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 - Compatibility section in README.md: tested on Ubuntu-based Linux and WSL; macOS not yet supported.
 - `--clear` and `--c` as aliases for `--cleanup`.
 
+### Changed
+
+- `--cleanup` now asks for confirmation before deleting anything, instead of deleting as soon as you press Enter in the checklist. With exactly one instance found, it skips the checklist and asks "Are you sure you want to remove it?" directly; with more than one, confirming the checklist selection shows "Are you sure you want to remove the following instances?" with the list before proceeding.
+
 ### Fixed
 
 - `generate_password` now guarantees at least one uppercase, lowercase, digit, and special character instead of drawing all 20 characters uniformly at random - the latter had roughly a 1-in-5 chance of producing a password with no special character, which TYPO3's default password policy rejects outright, failing the whole setup.

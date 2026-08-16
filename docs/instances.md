@@ -25,7 +25,14 @@ Non-interactive, plain output — safe to run in scripts or CI. Prints nothing t
 
 `--clear` and `--c` are exact aliases for `--cleanup`, in case that's easier to remember or type.
 
-Shows the same instances as `--list`, but as an interactive checklist:
+If there's only one instance, there's nothing to pick from — it just asks you to confirm removing that one:
+
+```
+Found: TYPO3 V12.4.45 | typo3-v12-5aae
+Are you sure you want to remove it? [y/N]
+```
+
+With more than one, you get an interactive checklist instead:
 
 ```
 Select instances to delete (Up/Down move, Space toggle, Enter confirm, q abort):
@@ -35,9 +42,18 @@ Select instances to delete (Up/Down move, Space toggle, Enter confirm, q abort):
 
 - `↑` / `↓` — move
 - `Space` — toggle selection
-- `Enter` — delete everything selected
+- `Enter` — confirm the selection
 - `q` — abort, nothing is touched
 
-For every selected instance it runs `ddev delete -Oy` (removes containers, DB volumes, the DDEV project listing, and the hosts file entry) and only deletes the project folder itself once that succeeded — if `ddev delete` fails for some reason, the folder is left in place so nothing gets silently lost.
+Confirming the selection doesn't delete anything right away — it lists exactly what you picked and asks once more:
+
+```
+Are you sure you want to remove the following instances?
+  - typo3-v12-5aae
+  - typo3-v13-6235
+Proceed? [y/N]
+```
+
+Only on `y`/`yes` does it actually run `ddev delete -Oy` for each one (removes containers, DB volumes, the DDEV project listing, and the hosts file entry) and only deletes the project folder itself once that succeeded — if `ddev delete` fails for some reason, the folder is left in place so nothing gets silently lost.
 
 `--cleanup` needs an interactive terminal (arrow keys / space / enter) — it won't run in a non-interactive shell or CI. Use `--list` there instead.

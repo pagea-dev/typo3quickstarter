@@ -252,76 +252,100 @@ run_cleanup() {
     exit 1
   fi
 
-  local total=${#ITEMS[@]}
-  local -a SELECTED=()
-  local i CURSOR=0
-  for i in "${!ITEMS[@]}"; do SELECTED[$i]=0; done
-
-  draw_menu() {
-    local j marker prefix
-    for j in "${!ITEMS[@]}"; do
-      marker=" "
-      [[ "${SELECTED[$j]}" == "1" ]] && marker="x"
-      prefix="  "
-      [[ $j -eq $CURSOR ]] && prefix="> "
-      printf "\033[K%s[%s] %s\n" "$prefix" "$marker" "${ITEMS[$j]}"
-    done
+  confirm() {
+    local answer
+    read -rp "$1 [y/N] " answer
+    [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
   }
 
-  echo "Select instances to delete (Up/Down move, Space toggle, Enter confirm, q abort):"
-  draw_menu
-
-  local old_stty
-  old_stty="$(stty -g)"
-  restore_tty() { stty "$old_stty" 2>/dev/null || true; tput cnorm 2>/dev/null || true; }
-  trap restore_tty EXIT
-  stty -icanon -echo min 1 time 0
-  tput civis 2>/dev/null || true
-
-  local key rest
-  while true; do
-    IFS= read -rsn1 key
-    if [[ "$key" == $'\x1b' ]]; then
-      IFS= read -rsn2 -t 0.05 rest || true
-      key+="$rest"
-    fi
-    case "$key" in
-      $'\x1b[A')
-        ((CURSOR--)) || true
-        ((CURSOR < 0)) && CURSOR=$((total - 1))
-        ;;
-      $'\x1b[B')
-        ((CURSOR++)) || true
-        ((CURSOR >= total)) && CURSOR=0
-        ;;
-      ' ')
-        if [[ "${SELECTED[$CURSOR]}" == "1" ]]; then SELECTED[$CURSOR]=0; else SELECTED[$CURSOR]=1; fi
-        ;;
-      ""|$'\n'|$'\r')
-        break
-        ;;
-      q|Q)
-        restore_tty
-        trap - EXIT
-        echo "Aborted, nothing deleted."
-        exit 0
-        ;;
-    esac
-    printf "\033[%dA" "$total"
-    draw_menu
-  done
-
-  restore_tty
-  trap - EXIT
-
   local -a TO_DELETE=()
-  for i in "${!ITEMS[@]}"; do
-    [[ "${SELECTED[$i]}" == "1" ]] && TO_DELETE+=("${NAMES[$i]}")
-  done
 
-  if [[ ${#TO_DELETE[@]} -eq 0 ]]; then
-    echo "Nothing selected, nothing deleted."
-    exit 0
+  # Only one candidate - no point showing a single-item checklist, just confirm it.
+  if [[ ${#NAMES[@]} -eq 1 ]]; then
+    echo "Found: ${ITEMS[0]}"
+    if ! confirm "Are you sure you want to remove it?"; then
+      echo "Aborted, nothing deleted."
+      exit 0
+    fi
+    TO_DELETE=("${NAMES[0]}")
+  else
+    local total=${#ITEMS[@]}
+    local -a SELECTED=()
+    local i CURSOR=0
+    for i in "${!ITEMS[@]}"; do SELECTED[$i]=0; done
+
+    draw_menu() {
+      local j marker prefix
+      for j in "${!ITEMS[@]}"; do
+        marker=" "
+        [[ "${SELECTED[$j]}" == "1" ]] && marker="x"
+        prefix="  "
+        [[ $j -eq $CURSOR ]] && prefix="> "
+        printf "\033[K%s[%s] %s\n" "$prefix" "$marker" "${ITEMS[$j]}"
+      done
+    }
+
+    echo "Select instances to delete (Up/Down move, Space toggle, Enter confirm, q abort):"
+    draw_menu
+
+    local old_stty
+    old_stty="$(stty -g)"
+    restore_tty() { stty "$old_stty" 2>/dev/null || true; tput cnorm 2>/dev/null || true; }
+    trap restore_tty EXIT
+    stty -icanon -echo min 1 time 0
+    tput civis 2>/dev/null || true
+
+    local key rest
+    while true; do
+      IFS= read -rsn1 key
+      if [[ "$key" == $'\x1b' ]]; then
+        IFS= read -rsn2 -t 0.05 rest || true
+        key+="$rest"
+      fi
+      case "$key" in
+        $'\x1b[A')
+          ((CURSOR--)) || true
+          ((CURSOR < 0)) && CURSOR=$((total - 1))
+          ;;
+        $'\x1b[B')
+          ((CURSOR++)) || true
+          ((CURSOR >= total)) && CURSOR=0
+          ;;
+        ' ')
+          if [[ "${SELECTED[$CURSOR]}" == "1" ]]; then SELECTED[$CURSOR]=0; else SELECTED[$CURSOR]=1; fi
+          ;;
+        ""|$'\n'|$'\r')
+          break
+          ;;
+        q|Q)
+          restore_tty
+          trap - EXIT
+          echo "Aborted, nothing deleted."
+          exit 0
+          ;;
+      esac
+      printf "\033[%dA" "$total"
+      draw_menu
+    done
+
+    restore_tty
+    trap - EXIT
+
+    for i in "${!ITEMS[@]}"; do
+      [[ "${SELECTED[$i]}" == "1" ]] && TO_DELETE+=("${NAMES[$i]}")
+    done
+
+    if [[ ${#TO_DELETE[@]} -eq 0 ]]; then
+      echo "Nothing selected, nothing deleted."
+      exit 0
+    fi
+
+    echo "Are you sure you want to remove the following instances?"
+    printf '  - %s\n' "${TO_DELETE[@]}"
+    if ! confirm "Proceed?"; then
+      echo "Aborted, nothing deleted."
+      exit 0
+    fi
   fi
 
   echo
