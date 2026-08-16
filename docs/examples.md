@@ -16,7 +16,7 @@ No flags at all. Installs the newest supported TYPO3 major version, generates a 
 ./typo3-ddev-setup.sh --release=12.4.20
 ```
 
-`--release` also accepts a bare major (`--release=12`, newest patch on that line) or a minor (`--release=12.4`, same thing right now since each major only has one LTS line). An exact patch like `12.4.20` pins that precise release instead — useful for reproducing an issue that was fixed in a later patch, or checking whether an extension breaks on an older core. See [versions.md](versions.md) for how the pinning works and the `--no-security-blocking` note that comes with it (Composer normally refuses to install versions flagged by a security advisory - pinning an old one on purpose bypasses that check).
+`--release` also accepts a bare major (`--release=12`, newest patch on that line) or a minor (`--release=12.4`, same thing right now since each major only has one LTS line). An exact patch like `12.4.20` pins that precise release instead — useful for reproducing an issue that was fixed in a later patch, or checking whether an extension breaks on an older core. See [versions.md](versions.md) for how the pinning works and the `--no-security-blocking` note that comes with it (Composer normally refuses to install versions flagged by a security advisory - this script bypasses that check throughout, not just when pinning).
 
 ## A specific login instead of the generated one
 

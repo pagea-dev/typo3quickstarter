@@ -577,6 +577,14 @@ ddev start
 ddev mysql -e "ALTER DATABASE db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 # --- TYPO3 installation via composer ------------------------------------------
+# Composer refuses by default to install any package version flagged by a known
+# security advisory - increasingly likely to hit even a plain, unpinned install,
+# since some package in a TYPO3 release line is pretty much always affected by
+# something at any given time. These are disposable local test instances, never
+# anything running in production, so that block is bypassed throughout on purpose
+# (also needed to intentionally reproduce a bug against an old pinned release).
+echo "${C_CYAN}==> Installing with --no-security-blocking: disposable test instances, not production${C_RESET}"
+
 # Scaffold the base distribution's composer.json without installing yet, so the
 # extra core packages below (and the version pin, if any) land in the same single
 # install/lock-solve instead of a separate one after the fact.
@@ -590,20 +598,16 @@ ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}
 ddev composer require \
   "typo3/cms-scheduler:${COMPOSER_CONSTRAINT}" \
   "typo3/cms-extensionmanager:${COMPOSER_CONSTRAINT}" \
-  --no-interaction --no-install
+  --no-interaction --no-install --no-security-blocking
 
 if [[ -z "$T3_PIN" ]]; then
-  ddev composer install --no-interaction
+  ddev composer install --no-interaction --no-security-blocking
 else
   echo "${C_CYAN}==> Pinning all TYPO3 core packages to exact version ${T3_PIN}${C_RESET}"
   # Literal (non-glob) replace: swap every "^X.Y" requirement for the pinned exact version.
   COMPOSER_JSON="$(cat composer.json)"
   COMPOSER_JSON="${COMPOSER_JSON//\"$COMPOSER_CONSTRAINT\"/\"$T3_PIN\"}"
   printf '%s\n' "$COMPOSER_JSON" > composer.json
-  # Composer refuses by default to install versions flagged by security advisories,
-  # which an intentionally pinned old patch release commonly is - that's expected here.
-  echo "${C_CYAN}==> Installing with --no-security-blocking: an older pinned release may be flagged"
-  echo "    by Composer's security-advisory check, and that block is bypassed on purpose here.${C_RESET}"
   ddev composer install --no-interaction --no-security-blocking
 fi
 
@@ -633,7 +637,7 @@ for i in "${!EXTENSION_PATHS[@]}"; do
     fi
 
     ddev composer config "repositories.local-extension-${i}" path "$mount_path"
-    ddev composer require "$package_name:@dev" --no-interaction
+    ddev composer require "$package_name:@dev" --no-interaction --no-security-blocking
 done
 
 # --- Additional composer packages ------------------------------------------
@@ -643,7 +647,7 @@ if [[ ${#COMPOSER_REQUIREMENTS[@]} -gt 0 ]]; then
 
   ddev composer require \
     "${COMPOSER_REQUIREMENTS[@]}" \
-    --no-interaction
+    --no-interaction --no-security-blocking
 fi
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------

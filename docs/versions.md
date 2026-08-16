@@ -41,16 +41,13 @@ Instead, the script:
 
 ## ⚠️ Security note: `--no-security-blocking`
 
-Pinning an older patch release installs it with Composer's `--no-security-blocking` flag.
-
-Composer normally refuses to install package versions flagged by a known security advisory. Since requesting an old release here is a deliberate choice — most commonly to reproduce a bug against the exact version it appeared in — that block is bypassed on purpose. The script prints a warning when this applies:
+Every Composer install/require in this script passes `--no-security-blocking`, printed once up front:
 
 ```
-==> Installing with --no-security-blocking: an older pinned release may be flagged
-    by Composer's security-advisory check, and that block is bypassed on purpose here.
+==> Installing with --no-security-blocking: disposable test instances, not production
 ```
 
-If you just want the latest, patched version, omit the patch level (`--release=12` or `--release=12.4`) — no advisories are bypassed in that case, since Composer resolves to the newest, patched release.
+Composer normally refuses to install any package version flagged by a known security advisory - and since there's essentially always something flagged somewhere in a TYPO3 release line, this can otherwise block even a completely plain, unpinned `--release=13` the moment Composer has to freshly resolve the full dependency tree (e.g. nothing yet locked, as right after `create-project`). Pinning an old patch release on purpose to reproduce a bug is the most common reason you'd actually want an affected version installed, but the block is bypassed unconditionally rather than only when pinning, since it would otherwise resurface unpredictably. These are disposable local test instances, never anything running in production, so that trade-off is fine here.
 
 ## TYPO3 v11 note
 
