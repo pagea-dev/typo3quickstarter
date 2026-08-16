@@ -168,11 +168,13 @@ run_cleanup() {
   local -a NAMES=() ITEMS=()
   local dir name version
 
-  for dir in "$scan_dir"/typo3-v*-*/; do
+  # Recognize an instance by the markers this script always creates - not by folder
+  # name - so instances started with --name=custom show up here too.
+  for dir in "$scan_dir"/*/; do
     [[ -d "$dir" ]] || continue
     name="$(basename "$dir")"
-    [[ "$name" =~ ^typo3-v[0-9]+-[0-9a-f]{4}$ ]] || continue
     [[ -f "$dir/.ddev/config.yaml" ]] || continue
+    [[ -f "$dir/typo3-credentials.txt" ]] || continue
     version="$(get_typo3_version "$dir")"
     NAMES+=("$name")
     ITEMS+=("TYPO3 V${version} | ${name}")
