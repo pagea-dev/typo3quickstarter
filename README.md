@@ -82,7 +82,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 | `--require=PKG` | Install extra Composer packages after setup — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--extension=PATH` | Mount and require a local extension for development — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--list` | List all instances this script created — see [docs/instances.md](docs/instances.md) | — |
-| `--cleanup` | Interactively remove previously created instances — see [docs/instances.md](docs/instances.md) | — |
+| `--cleanup`, `--clear`, `--c` | Interactively remove previously created instances — see [docs/instances.md](docs/instances.md) | — |
 | `-v`, `--verbose` | Also write the full console output to `verbose.log` — see [docs/verbose-logging.md](docs/verbose-logging.md) | — |
 | `-h`, `--help` | Show usage | — |
 | `--version` | Show the script's own version — see [docs/information.md](docs/information.md) | — |

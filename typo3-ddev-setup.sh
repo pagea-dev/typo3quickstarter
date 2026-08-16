@@ -48,7 +48,7 @@ Options:
   --extension=PATH        Mount a local extension directory and require it at :@dev for
                           development (see docs/composer-packages.md). Same multi-value syntax
                           as --require.
-  --cleanup               Interactively pick previously created instances and remove them completely
+  --c, --clear, --cleanup Interactively pick previously created instances and remove them completely
                           (Docker containers/volumes, DDEV project listing, hosts entry, project directory)
   --list                  List all instances this script created (scans --path, non-interactive)
   -v, --verbose           Also write the full console output to verbose.log in the project
@@ -107,7 +107,7 @@ for arg in "$@"; do
       CURRENT_OPTION="extension"
       EXTENSION_PATHS+=("${arg#*=}")
       ;;
-    --cleanup)
+    --cleanup|--clear|--c)
       CURRENT_OPTION=""
       CLEANUP=1
       ;;

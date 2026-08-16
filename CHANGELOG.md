@@ -10,6 +10,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 - `docs/CONTRIBUTING.md` with PR guidelines (branch from an up-to-date `main`, test the script for real, keep the executable bit, update docs/CHANGELOG for user-facing changes), linked from README.md.
 - `-v`/`--verbose` writes the full console output to `verbose.log` in the project directory (`chmod 600` + `.gitignore`, same as `typo3-credentials.txt` - it can contain the same passwords). Starts logging once the project directory exists, and moves the log in from a temp location once Composer is done with it, since `ddev composer create-project` requires an empty target directory. See [docs/verbose-logging.md](docs/verbose-logging.md).
 - Compatibility section in README.md: tested on Ubuntu-based Linux and WSL; macOS not yet supported.
+- `--clear` and `--c` as aliases for `--cleanup`.
 
 ### Fixed
 

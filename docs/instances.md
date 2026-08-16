@@ -23,6 +23,8 @@ Non-interactive, plain output — safe to run in scripts or CI. Prints nothing t
 ./typo3-ddev-setup.sh --cleanup
 ```
 
+`--clear` and `--c` are exact aliases for `--cleanup`, in case that's easier to remember or type.
+
 Shows the same instances as `--list`, but as an interactive checklist:
 
 ```
