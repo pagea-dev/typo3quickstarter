@@ -10,6 +10,7 @@ ADMIN_PASSWORD=""
 ADMIN_EMAIL=""
 CLEANUP=0
 COMPOSER_REQUIREMENTS=()
+EXTENSION_PATHS=()
 
 usage() {
   cat <<'EOF'
@@ -39,10 +40,26 @@ for arg in "$@"; do
     --admin-password=*) ADMIN_PASSWORD="${arg#*=}" ;;
     --admin-email=*) ADMIN_EMAIL="${arg#*=}" ;;
     --require=*) COMPOSER_REQUIREMENTS+=("${arg#*=}") ;;
+    --extension=*) EXTENSION_PATHS+=("${arg#*=}") ;;
     --cleanup) CLEANUP=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; usage; exit 1 ;;
   esac
+done
+
+# --- check if extension paths exist ------------------------------------------
+for i in "${!EXTENSION_PATHS[@]}"; do
+  EXTENSION_PATHS[$i]="$(realpath "${EXTENSION_PATHS[$i]}")"
+
+  if [[ ! -d "${EXTENSION_PATHS[$i]}" ]]; then
+    echo "Extension path does not exist: ${EXTENSION_PATHS[$i]}" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "${EXTENSION_PATHS[$i]}/composer.json" ]]; then
+    echo "Extension does not contain a composer.json: ${EXTENSION_PATHS[$i]}" >&2
+    exit 1
+  fi
 done
 
 command -v docker >/dev/null 2>&1 || { echo "Error: docker is not installed or not in PATH." >&2; exit 1; }
@@ -245,10 +262,66 @@ ddev config \
   --create-docroot \
   --php-version="$PHP_VERSION"
 
+# --- Mount extension paths into docker ------------------------------------------
+if [[ ${#EXTENSION_PATHS[@]} -gt 0 ]]; then
+    {
+        echo "services:"
+        echo "  web:"
+        echo "    volumes:"
+
+        for i in "${!EXTENSION_PATHS[@]}"; do
+            extension_path="$(realpath "${EXTENSION_PATHS[$i]}")"
+
+            if [[ ! -d "$extension_path" ]]; then
+                echo "Extension path does not exist: $extension_path" >&2
+                exit 1
+            fi
+
+            if [[ ! -f "$extension_path/composer.json" ]]; then
+                echo "Extension does not contain a composer.json: $extension_path" >&2
+                exit 1
+            fi
+
+            echo "      - ${extension_path}:/mnt/extension-${i}"
+        done
+    } > .ddev/docker-compose.extensions.yaml
+fi
+
 ddev start
 
 # --- TYPO3 installation via composer ------------------------------------------
 ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
+
+# --- Add mounted extension paths to composer.json packages ------------------------------------------
+#debug: check mounted paths
+#for i in "${!EXTENSION_PATHS[@]}"; do
+#    echo "==> Mounting extension: ${EXTENSION_PATHS[$i]}"
+#    echo "      ${EXTENSION_PATHS[$i]}:/mnt/extension-${i}"
+#    echo "      - ${EXTENSION_PATHS[$i]}:/mnt/extension-${i}"
+#done
+
+for i in "${!EXTENSION_PATHS[@]}"; do
+    mount_path="/mnt/extension-${i}"
+
+    package_name="$(
+        ddev exec --raw php -r '
+            $composer = json_decode(
+                file_get_contents($argv[1]),
+                true
+            );
+
+            echo $composer["name"] ?? "";
+        ' "${mount_path}/composer.json"
+    )"
+
+    if [[ -z "$package_name" ]]; then
+        echo "Could not determine Composer package name for ${EXTENSION_PATHS[$i]}" >&2
+        exit 1
+    fi
+
+    ddev composer config "repositories.local-extension-${i}" path "$mount_path"
+    ddev composer require "$package_name:@dev" --no-interaction
+done
 
 # --- Additional composer packages ------------------------------------------
 if [[ ${#COMPOSER_REQUIREMENTS[@]} -gt 0 ]]; then
