@@ -1,4 +1,5 @@
 .claude/
 .vscode/
+.ddev/
 typo3-v*
 .verbose-log*

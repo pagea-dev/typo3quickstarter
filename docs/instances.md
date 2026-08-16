@@ -1,6 +1,8 @@
 # Managing your instances
 
-`--list` and `--cleanup` both scan a directory (current directory, or `--path=DIR`) for instances this script created. They recognize an instance by the marker files it always writes — `.ddev/config.yaml` and `typo3-credentials.txt` in the project folder — not by the folder name. So instances started with a custom `--name=` are found just as reliably as auto-generated ones.
+`--list` and `--cleanup` both scan a directory (current directory, or `--path=DIR`) for instances this script created. They recognize an instance by the marker files it writes — `.ddev/config.yaml` plus either `.typo3-ddev-setup-marker` or `typo3-credentials.txt` in the project folder — not by the folder name. So instances started with a custom `--name=` are found just as reliably as auto-generated ones.
+
+`.typo3-ddev-setup-marker` is written right after `ddev config`, before anything that could still fail (Composer, the TYPO3 setup itself, ...) - `typo3-credentials.txt` alone only proves a run finished successfully, so without it a run that died partway would leave a DDEV project neither command could find or remove.
 
 The TYPO3 version shown is read straight out of each instance's `composer.lock` (the exact `typo3/cms-core` version), not just the major version encoded in the folder name.
 
@@ -58,6 +60,17 @@ Only on `y`/`yes` does it actually run `ddev delete -Oy` for each one (removes c
 
 `--cleanup` needs an interactive terminal (arrow keys / space / enter) — it won't run in a non-interactive shell or CI. Use `--list` there instead.
 
+### Extra guard for version-controlled work
+
+Right before actually deleting an instance (any of the paths above - single, checklist, or `--c all`), it's checked for a `.git` directory anywhere inside it - most commonly `packages/<extension>/.git` from [`--with-git`](with-git.md), but this catches any `.git` found in there, not just ones this script created. If one's found, deleting stops for a stronger, separate confirmation:
+
+```
+WARNING: found a .git directory inside typo3-v12-5aae - there's version-controlled work in there that would be permanently lost.
+Type 'yes' (not just 'y') to delete typo3-v12-5aae anyway - this cannot be undone:
+```
+
+Unlike every other confirmation in this script, a bare `y` does not count here - only the word `yes` written out in full does (case-insensitive: `yes`/`Yes`/`YES`). Anything else, including a bare `y` or `Y`, skips just that instance and leaves it in place; the rest of the batch (if there is one) is unaffected.
+
 ## Targeting a specific instance
 
 Every "Done" summary prints a ready-to-use cleanup command for the instance you just created:
@@ -75,3 +88,20 @@ To clean up this instance: ./typo3-ddev-setup.sh --c 5aae
 For an auto-generated name like `typo3-v12-5aae`, the 4-character suffix alone is enough and is what the hint prints — it's short and, in practice, unique. For a custom `--name=`, there's no separate suffix, so the hint prints the full name instead.
 
 If the filter narrows things down to exactly one instance, it skips straight to the single-instance confirmation (`Found: ... Are you sure you want to remove it?`); with more than one match it still shows the checklist, just restricted to those. No match prints `No instance matching <target> found in '<path>'.` instead of the usual empty-scan message.
+
+## Removing everything: `--c all`
+
+```bash
+./typo3-ddev-setup.sh --c all
+```
+
+`all` is a special target, not a name/ID substring - used on its own it means every instance found under `--path`. Skips the checklist entirely and goes straight to one confirmation listing all of them:
+
+```
+Are you sure you want to remove ALL of the following instances?
+  - TYPO3 V12.4.45 | typo3-v12-5aae
+  - TYPO3 V13.4.1  | typo3-v13-6235
+Proceed? [y/N]
+```
+
+Same `y`/`yes`-only deletion behavior as above - nothing is touched until you confirm, and each instance is only removed from disk once `ddev delete` succeeds for it. Only works when `all` is the sole target; `--c all 5aae` is treated as two literal substrings instead (neither of which is likely to match anything named `all`), not as a shortcut for "everything".

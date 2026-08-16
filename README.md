@@ -4,6 +4,8 @@ One-command bash script that spins up disposable TYPO3 instances on [DDEV](https
 
 Built because roughly half of all TYPO3 sites out there are still running on old major versions — this makes it trivial to spin up several versions side by side and see what actually changed.
 
+Got an idea for a feature, or found a bug? [Open an issue](https://github.com/pagea-dev/typo3quickstarter/issues) - feature requests are welcome, not just bug reports.
+
 ![typo3quickstarter demo](demo.gif)
 
 ## Why
@@ -11,6 +13,7 @@ Built because roughly half of all TYPO3 sites out there are still running on old
 - **One command, zero clicking through the install wizard.** No more re-typing DB credentials or admin passwords by hand.
 - **Test against multiple TYPO3 versions in parallel.** Each instance gets its own name, its own DDEV project, its own URL.
 - **Disposable by design.** Spin one up, break it, tear it down. `--cleanup` gets rid of the mess for you.
+- **Kickstart a brand-new extension and have it under git from the first commit.** `--with-git` runs the official [TYPO3 extension kickstarter](https://github.com/FriendsOfTYPO3/kickstarter), then initializes a repository right where it just created your extension - a working TYPO3 instance, a scaffolded extension, and its own git history, from a single command. See [docs/with-git.md](docs/with-git.md).
 
 ## Prerequisites
 
@@ -84,6 +87,7 @@ To clean up this instance: ./typo3-ddev-setup.sh --c a1b2
 | `--list` | List all instances this script created — see [docs/instances.md](docs/instances.md) | — |
 | `--cleanup`, `--clear`, `--c` [TARGET...] | Interactively remove previously created instances, optionally narrowed down to name/ID matches — see [docs/instances.md](docs/instances.md) | — |
 | `-v`, `--verbose` | Also write the full console output to `verbose.log` — see [docs/verbose-logging.md](docs/verbose-logging.md) | — |
+| `--with-git` | After setup, ask whether to `git init` the whole project or scaffold and version a new extension — see [docs/with-git.md](docs/with-git.md) | — |
 | `-h`, `--help` | Show usage | — |
 | `--version` | Show the script's own version — see [docs/information.md](docs/information.md) | — |
 
@@ -101,11 +105,22 @@ An exact TYPO3 12 patch release, plus a specific version of an extension (`--req
 ./typo3-ddev-setup.sh --release=12.4.20 --require=georgringer/news:^11.0
 ```
 
+Kickstart a brand-new extension against the newest TYPO3, then put just that extension under git once it's created:
+
+```bash
+./typo3-ddev-setup.sh --with-git
+```
+
+Pick option 2 when asked, follow the kickstarter's prompts, and you'll have a working TYPO3 instance plus a freshly versioned extension - see [docs/with-git.md](docs/with-git.md).
+
 ## Documentation
 
+- [docs/examples.md](docs/examples.md) — practical recipes for common scenarios: pinning a patch release, custom admin logins, extensions, cleanup, and more
 - [docs/versions.md](docs/versions.md) — selecting a version, pinning an exact patch release, the `--no-security-blocking` security note, TYPO3 v11 quirks
 - [docs/backend-users.md](docs/backend-users.md) — the admin backend user
 - [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
+- [docs/development-settings.md](docs/development-settings.md) — the always-on extras every instance gets: Scheduler/Extensions core extensions, `TYPO3_CONTEXT=Development`, debug settings
+- [docs/with-git.md](docs/with-git.md) — `--with-git`: version the whole project or scaffold and version a new extension
 - [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
 - [docs/verbose-logging.md](docs/verbose-logging.md) — `--verbose`/`verbose.log`
 - [docs/information.md](docs/information.md) — the script's own `--version` and the release process
@@ -125,6 +140,17 @@ macOS isn't tested or supported yet - happy to take a PR from someone who wants 
 ## Notes
 
 - `typo3-credentials.txt` is written outside the `public/` docroot, so it's never reachable over HTTP, and it gets `chmod 600` plus an entry in `.gitignore` automatically. `verbose.log` (with `--verbose`) gets the same treatment.
+
+## Special thanks
+
+This project stands entirely on the shoulders of others' work:
+
+- [DDEV](https://ddev.com) — the local dev environment this whole script is built around.
+- [Docker](https://www.docker.com/) — the container runtime underneath DDEV.
+- [TYPO3](https://typo3.org) — the CMS this exists to spin up.
+- [TYPO3 Extension Kickstarter](https://github.com/FriendsOfTYPO3/kickstarter) — the interactive extension scaffolding used by `--with-git` (see [docs/with-git.md](docs/with-git.md)).
+
+Thanks to everyone building and maintaining these projects.
 
 ## License
 

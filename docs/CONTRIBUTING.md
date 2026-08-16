@@ -4,7 +4,7 @@ Thanks for considering a PR. This is a small single-file script, so a few practi
 
 ## Before you start
 
-- **Branch from an up-to-date `main`.** Pull the latest `main` (or check the [Releases page](https://github.com/pagea-dev/typo3quickstarter/releases) for the current version) before branching. A PR based on an old `main` commit can pick up merge conflicts against work that landed in the meantime - the more out of date the base, the messier the merge.
+- **Branch from the current version branch, not `main`.** Development happens on a branch named after the in-progress version (e.g. `0.4.0`) - check the repo's branch list for the highest version number and base your PR on that, not on `main`. `main` only moves forward once that version is actually released via its own PR; it doesn't carry in-progress work, and **PRs opened against `main` are ignored**.
 - **One feature/fix per PR.** Keeps review focused and makes it easier to cut a clean changelog entry.
 
 ## Before you open the PR

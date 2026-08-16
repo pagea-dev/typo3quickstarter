@@ -5,6 +5,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-16
+
+### Added
+
+- Colored output based on message status: progress steps in cyan, errors in red, warnings in yellow, the final success summary in green. Auto-disables when stdout isn't a terminal (piping, `--list` in scripts/CI) or `--verbose` is set (keeps `verbose.log` free of escape codes), and can be forced off with `NO_COLOR=1`.
+- A welcome banner (tool name, version, author, repo link) before every actual install run.
+- [docs/examples.md](docs/examples.md) - practical recipes for common scenarios (pinning a patch release, custom admin logins, extensions, cleanup, and more), linked from the README.
+- `--c all`/`--clear all`/`--cleanup all` removes every instance found under `--path` in one go - skips the checklist and asks once to confirm removing all of them.
+- Every instance now also gets `typo3/cms-scheduler` and `typo3/cms-extensionmanager`, runs under `TYPO3_CONTEXT=Development`, and has `BE/debug`, `FE/debug` on and `SYS/debugExceptionHandler` disabled - see [docs/development-settings.md](docs/development-settings.md).
+- Runs `ddev describe` right before opening the backend, alongside the existing summary.
+- `--with-git` asks, after setup, whether to `git init` the whole project (with a sensible `.gitignore` on top of the base distribution's own) or run the [TYPO3 extension kickstarter](https://github.com/FriendsOfTYPO3/kickstarter) to create a brand-new extension under `packages/` and version that alone (TYPO3 12+ only) - see [docs/with-git.md](docs/with-git.md).
+- `--cleanup`/`--clear`/`--c` now refuses to silently delete an instance containing a `.git` directory anywhere inside it: a separate warning requires typing out `yes` in full (not just `y`) before it proceeds - see [docs/instances.md](docs/instances.md).
+
+### Fixed
+
+- Requiring `typo3/cms-scheduler`/`typo3/cms-extensionmanager` right after `create-project --no-install` could fail with "affected by security advisories" on a completely plain, unpinned `--release`, since Composer audits the whole dependency tree the moment it resolves it for the first time (nothing locked yet at that point) - not just when pinning an old patch release. `--no-security-blocking` is now used throughout instead of only for pinned installs - see [docs/versions.md](docs/versions.md).
+- Composer-required extensions (`--require`/`--extension`) never got their database tables created or caches cleared, since nothing ran `extension:setup` after `composer require`. Now runs automatically after the TYPO3 install step, before the backend opens.
+- The backend's Database Analyzer permanently showed pending "CHANGE COLUMN" diffs for every table: DDEV creates its database with an explicit `utf8mb4` charset and no collation, which defaults to `utf8mb4_general_ci`, while TYPO3 configures all its tables for `utf8mb4_unicode_ci` - and no CLI command can apply that class of schema change after the fact. Now sets the database's default collation to match right after `ddev start`, before any tables exist.
+- `--list`/`--cleanup` required `typo3-credentials.txt` to recognize an instance, which is only written once a run finishes successfully - a run that failed partway (Composer, TYPO3 setup, ...) left an orphaned DDEV project neither command could find, let alone remove. A `.typo3-ddev-setup-marker` file is now written right after `ddev config`, before anything that could still fail, and either it or `typo3-credentials.txt` is now enough to be recognized.
+
 ## [0.3.0] - 2026-08-16
 
 ### Added
