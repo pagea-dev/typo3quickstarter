@@ -764,4 +764,7 @@ if [[ "$VERBOSE" -eq 1 ]]; then
 fi
 echo "To clean up this instance: ./typo3-ddev-setup.sh --c ${SUFFIX:-$PROJECT_NAME}"
 
+echo
+ddev describe
+
 ddev launch /typo3 >/dev/null 2>&1 || echo "Note: could not auto-open the browser, open the backend URL above manually."
