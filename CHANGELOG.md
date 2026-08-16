@@ -16,6 +16,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 - Every instance now also gets `typo3/cms-scheduler` and `typo3/cms-extensionmanager`, runs under `TYPO3_CONTEXT=Development`, and has `BE/debug`, `FE/debug` on and `SYS/debugExceptionHandler` disabled - see [docs/development-settings.md](docs/development-settings.md).
 - Runs `ddev describe` right before opening the backend, alongside the existing summary.
 - `--with-git` asks, after setup, whether to `git init` the whole project (with a sensible `.gitignore` on top of the base distribution's own) or run the [TYPO3 extension kickstarter](https://github.com/FriendsOfTYPO3/kickstarter) to create a brand-new extension under `packages/` and version that alone (TYPO3 12+ only) - see [docs/with-git.md](docs/with-git.md).
+- `--cleanup`/`--clear`/`--c` now refuses to silently delete an instance containing a `.git` directory anywhere inside it: a separate warning requires typing out `yes` in full (not just `y`) before it proceeds - see [docs/instances.md](docs/instances.md).
 
 ### Fixed
 

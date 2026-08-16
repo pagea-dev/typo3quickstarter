@@ -60,6 +60,17 @@ Only on `y`/`yes` does it actually run `ddev delete -Oy` for each one (removes c
 
 `--cleanup` needs an interactive terminal (arrow keys / space / enter) — it won't run in a non-interactive shell or CI. Use `--list` there instead.
 
+### Extra guard for version-controlled work
+
+Right before actually deleting an instance (any of the paths above - single, checklist, or `--c all`), it's checked for a `.git` directory anywhere inside it - most commonly `packages/<extension>/.git` from [`--with-git`](with-git.md), but this catches any `.git` found in there, not just ones this script created. If one's found, deleting stops for a stronger, separate confirmation:
+
+```
+WARNING: found a .git directory inside typo3-v12-5aae - there's version-controlled work in there that would be permanently lost.
+Type 'yes' (not just 'y') to delete typo3-v12-5aae anyway - this cannot be undone:
+```
+
+Unlike every other confirmation in this script, a bare `y` does not count here - only the word `yes` written out in full does (case-insensitive: `yes`/`Yes`/`YES`). Anything else, including a bare `y` or `Y`, skips just that instance and leaves it in place; the rest of the batch (if there is one) is unaffected.
+
 ## Targeting a specific instance
 
 Every "Done" summary prints a ready-to-use cleanup command for the instance you just created:

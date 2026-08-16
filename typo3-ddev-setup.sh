@@ -295,6 +295,15 @@ confirm() {
   [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
+# Like confirm(), but only the word "yes" written out in full counts as a yes -
+# a bare "y" does not. Used before deleting an instance that has a .git
+# directory in it, so an accidental keystroke can't wipe out real work.
+confirm_exact_yes() {
+  local answer
+  read -rp "$1 " answer
+  [[ "$answer" =~ ^[Yy][Ee][Ss]$ ]]
+}
+
 abort() {
   echo "${C_YELLOW}Aborted, nothing deleted.${C_RESET}"
   exit 0
@@ -456,6 +465,18 @@ run_cleanup() {
   echo
   local proj
   for proj in "${TO_DELETE[@]}"; do
+    # A .git directory anywhere inside means real, version-controlled work
+    # could be sitting in there (--with-git, or something unrelated entirely) -
+    # deleting the project directory would wipe it out unrecoverably, so this
+    # needs a harder, deliberate confirmation than the one already given above.
+    if find "${scan_dir}/${proj}" -type d -name .git -print -quit 2>/dev/null | grep -q .; then
+      echo "${C_RED}${C_BOLD}WARNING: found a .git directory inside ${proj} - there's version-controlled work in there that would be permanently lost.${C_RESET}"
+      if ! confirm_exact_yes "${C_RED}Type 'yes' (not just 'y') to delete ${proj} anyway - this cannot be undone:${C_RESET}"; then
+        echo "${C_YELLOW}Skipping ${proj}.${C_RESET}"
+        continue
+      fi
+    fi
+
     echo "${C_CYAN}==> Removing DDEV project (containers, volumes, DB, hosts entry): ${proj}${C_RESET}"
     if ddev delete -Oy "$proj"; then
       echo "${C_CYAN}==> Removing project directory: ${scan_dir}/${proj}${C_RESET}"
