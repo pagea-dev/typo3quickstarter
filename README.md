@@ -95,6 +95,8 @@ Currently supported TYPO3 versions:
 
 > Project folder/DDEV names are always based on the major version (e.g. `typo3-v12-a1b2`), even if you pinned an exact patch release with `--v=12.4.20`.
 
+> **Pinning a patch release:** `typo3/cms-base-distribution` (the meta-package the script installs) only has a couple of releases of its own — it just bundles the real `typo3/cms-*` packages via the constraints above. So pinning e.g. `--v=12.4.20` can't be done by requesting that version of the distribution package directly; the script installs via the normal constraint first and then re-pins every `typo3/cms-*` package to the exact version. Older patch releases are often flagged by Composer's security-advisory check — since pinning one is a deliberate choice here, the script installs it anyway with `--no-security-blocking`.
+
 > **v11 note:** TYPO3 v11's native `typo3 setup` CLI command crashes on fresh installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). For `--v=11` the script automatically falls back to the legacy `typo3cms install:setup` installer instead, which doesn't have this bug.
 
 ### Cleaning up

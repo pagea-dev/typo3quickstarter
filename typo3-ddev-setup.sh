@@ -203,21 +203,23 @@ else
 fi
 
 case "$T3_MAJOR" in
-  11) PHP_VERSION="8.1"; DEFAULT_CONSTRAINT="^11.5" ;;
-  12) PHP_VERSION="8.2"; DEFAULT_CONSTRAINT="^12.4" ;;
-  13) PHP_VERSION="8.3"; DEFAULT_CONSTRAINT="^13.4" ;;
-  14) PHP_VERSION="8.4"; DEFAULT_CONSTRAINT="^14.3" ;;
+  11) PHP_VERSION="8.1"; COMPOSER_CONSTRAINT="^11.5" ;;
+  12) PHP_VERSION="8.2"; COMPOSER_CONSTRAINT="^12.4" ;;
+  13) PHP_VERSION="8.3"; COMPOSER_CONSTRAINT="^13.4" ;;
+  14) PHP_VERSION="8.4"; COMPOSER_CONSTRAINT="^14.3" ;;
   *)
     echo "Error: TYPO3 version '$T3_VERSION' is not supported yet (currently: ${SUPPORTED_VERSIONS[*]})." >&2
     exit 1
     ;;
 esac
 
-if [[ "$T3_VERSION" == "$T3_MAJOR" ]]; then
-  COMPOSER_CONSTRAINT="$DEFAULT_CONSTRAINT"
-else
-  # user pinned a specific minor/patch release, e.g. 12.4.20 -> install exactly that
-  COMPOSER_CONSTRAINT="$T3_VERSION"
+# typo3/cms-base-distribution itself only gets a handful of releases (it just bundles
+# the real typo3/cms-* packages via "$COMPOSER_CONSTRAINT"), so it can't be pinned to
+# an exact minor/patch version directly. If the user asked for one, install via the
+# normal constraint first and pin every typo3/cms-* package afterwards (see below).
+T3_PIN=""
+if [[ "$T3_VERSION" != "$T3_MAJOR" ]]; then
+  T3_PIN="$T3_VERSION"
 fi
 
 # --- Derived values --------------------------------------------------------
@@ -256,7 +258,19 @@ ddev config \
 ddev start
 
 # --- TYPO3 installation via composer ------------------------------------------
-ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
+if [[ -z "$T3_PIN" ]]; then
+  ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
+else
+  echo "==> Pinning all TYPO3 core packages to exact version ${T3_PIN}"
+  ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction --no-install
+  # Literal (non-glob) replace: swap every "^X.Y" requirement for the pinned exact version.
+  COMPOSER_JSON="$(cat composer.json)"
+  COMPOSER_JSON="${COMPOSER_JSON//\"$COMPOSER_CONSTRAINT\"/\"$T3_PIN\"}"
+  printf '%s\n' "$COMPOSER_JSON" > composer.json
+  # Composer refuses by default to install versions flagged by security advisories,
+  # which an intentionally pinned old patch release commonly is - that's expected here.
+  ddev composer install --no-interaction --no-security-blocking
+fi
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------
 if [[ "$T3_MAJOR" -eq 11 ]]; then
