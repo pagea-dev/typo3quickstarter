@@ -15,6 +15,7 @@ BE_USER=""
 BE_PASSWORD=""
 BE_EMAIL=""
 CLEANUP=0
+LIST=0
 COMPOSER_REQUIREMENTS=()
 EXTENSION_PATHS=()
 CURRENT_OPTION=""
@@ -23,6 +24,7 @@ usage() {
   cat <<'EOF'
 Usage: typo3-ddev-setup.sh --release=<version> [options]
        typo3-ddev-setup.sh --cleanup [--path=DIR]
+       typo3-ddev-setup.sh --list [--path=DIR]
 
 Options:
   -r=N, --release=N      TYPO3 version to install (currently supported major versions: 11, 12, 13, 14;
@@ -47,10 +49,11 @@ Options:
                           as --require.
   --cleanup               Interactively pick previously created instances and remove them completely
                           (Docker containers/volumes, DDEV project listing, hosts entry, project directory)
+  --list                  List all instances this script created (scans --path, non-interactive)
   -h, --help              Show this help
   --version               Show script version
 
-See docs/ for detailed documentation on versions, backend users, Composer packages/extensions, and cleanup.
+See docs/ for detailed documentation on versions, backend users, Composer packages/extensions, and listing/cleanup.
 EOF
 }
 
@@ -103,6 +106,10 @@ for arg in "$@"; do
     --cleanup)
       CURRENT_OPTION=""
       CLEANUP=1
+      ;;
+    --list)
+      CURRENT_OPTION=""
+      LIST=1
       ;;
     -h|--help)
       usage
@@ -175,24 +182,53 @@ get_typo3_version() {
   echo "${v:-unknown}"
 }
 
-run_cleanup() {
-  local scan_dir="${BASE_PATH%/}"
-  [[ -d "$scan_dir" ]] || { echo "Error: '$scan_dir' does not exist." >&2; exit 1; }
-
-  local -a NAMES=() ITEMS=()
-  local dir name version
-
-  # Recognize an instance by the markers this script always creates - not by folder
-  # name - so instances started with --name=custom show up here too.
+# Prints one "name<TAB>version" line per instance found under $1. Recognizes an
+# instance by the markers this script always creates - not by folder name - so
+# instances started with --name=custom are found too.
+find_instances() {
+  local scan_dir="$1"
+  local dir name
   for dir in "$scan_dir"/*/; do
     [[ -d "$dir" ]] || continue
     name="$(basename "$dir")"
     [[ -f "$dir/.ddev/config.yaml" ]] || continue
     [[ -f "$dir/typo3-credentials.txt" ]] || continue
-    version="$(get_typo3_version "$dir")"
+    printf '%s\t%s\n' "$name" "$(get_typo3_version "$dir")"
+  done
+}
+
+run_list() {
+  local scan_dir="${BASE_PATH%/}"
+  [[ -d "$scan_dir" ]] || { echo "Error: '$scan_dir' does not exist." >&2; exit 1; }
+
+  local -a NAMES=() VERSIONS=()
+  local name version
+  while IFS=$'\t' read -r name version; do
+    NAMES+=("$name")
+    VERSIONS+=("$version")
+  done < <(find_instances "$scan_dir")
+
+  if [[ ${#NAMES[@]} -eq 0 ]]; then
+    echo "No typo3-ddev-setup instances found in '${scan_dir}'."
+    exit 0
+  fi
+
+  local i
+  for i in "${!NAMES[@]}"; do
+    printf 'TYPO3 V%-10s %-24s https://%s.ddev.site\n' "${VERSIONS[$i]}" "${NAMES[$i]}" "${NAMES[$i]}"
+  done
+}
+
+run_cleanup() {
+  local scan_dir="${BASE_PATH%/}"
+  [[ -d "$scan_dir" ]] || { echo "Error: '$scan_dir' does not exist." >&2; exit 1; }
+
+  local -a NAMES=() ITEMS=()
+  local name version
+  while IFS=$'\t' read -r name version; do
     NAMES+=("$name")
     ITEMS+=("TYPO3 V${version} | ${name}")
-  done
+  done < <(find_instances "$scan_dir")
 
   if [[ ${#NAMES[@]} -eq 0 ]]; then
     echo "No typo3-ddev-setup instances found in '${scan_dir}'."
@@ -290,6 +326,11 @@ run_cleanup() {
 
   echo "Cleanup done."
 }
+
+if [[ "$LIST" -eq 1 ]]; then
+  run_list
+  exit 0
+fi
 
 if [[ "$CLEANUP" -eq 1 ]]; then
   run_cleanup
