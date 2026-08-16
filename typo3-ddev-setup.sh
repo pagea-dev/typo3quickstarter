@@ -461,8 +461,8 @@ if [[ "$CLEANUP" -eq 1 ]]; then
   exit 0
 fi
 
-echo "${C_BOLD}${C_CYAN}typo3quickstarter${C_RESET} ${C_GREEN}v${SCRIPT_VERSION}${C_RESET} ${C_YELLOW}by Lukas Dörr${C_RESET}"
-echo "${C_CYAN}https://github.com/pagea-dev/typo3quickstarter${C_RESET}"
+echo "${C_BOLD}${C_CYAN}typo3quickstarter${C_RESET} ${C_GREEN}v${SCRIPT_VERSION}${C_RESET} ${C_YELLOW}by Pagea Development${C_RESET}"
+echo "${C_CYAN}https://github.com/pagea-dev/typo3quickstarter${C_RESET} · ${C_CYAN}https://pagea.dev/${C_RESET}"
 echo
 
 # --- Version map --------------------------------------------------------
