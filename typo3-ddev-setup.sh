@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
-SCRIPT_VERSION="0.2.0"
+SCRIPT_VERSION="0.3.0"
 
 # --- Defaults ---------------------------------------------------------------
 T3_VERSION=""
@@ -11,13 +11,12 @@ BASE_PATH="."
 ADMIN_USER="admin"
 ADMIN_PASSWORD=""
 ADMIN_EMAIL=""
-BE_USER=""
-BE_PASSWORD=""
-BE_EMAIL=""
 CLEANUP=0
 LIST=0
+VERBOSE=0
 COMPOSER_REQUIREMENTS=()
 EXTENSION_PATHS=()
+CLEANUP_TARGETS=()
 CURRENT_OPTION=""
 
 usage() {
@@ -38,18 +37,20 @@ Options:
   --admin-user=USER       Backend admin username (default: admin)
   --admin-password=PASS   Backend admin password (default: randomly generated)
   --admin-email=MAIL      Backend admin email (default: admin@<project>.ddev.site)
-  --beuser=USER           Create an additional admin backend user with this username
-                          (not supported for --release=11, see docs/backend-users.md)
-  --bepass=PASS           Password for --beuser (default: randomly generated)
-  --bemail=MAIL           Email for --beuser (default: <beuser>@<project>.ddev.site)
   --require=PKG           Install an extra Composer package after setup. Repeat the flag or
                           list several packages after one occurrence, space-separated.
   --extension=PATH        Mount a local extension directory and require it at :@dev for
                           development (see docs/composer-packages.md). Same multi-value syntax
                           as --require.
-  --cleanup               Interactively pick previously created instances and remove them completely
-                          (Docker containers/volumes, DDEV project listing, hosts entry, project directory)
+  --c, --clear, --cleanup Interactively pick previously created instances and remove them completely
+                          (Docker containers/volumes, DDEV project listing, hosts entry, project directory).
+                          Optionally followed by one or more name/ID substrings to only consider
+                          matching instances, e.g. --c 0392 to target the instance whose auto-generated
+                          name ends in 0392 directly (skips the checklist if that's the only match).
   --list                  List all instances this script created (scans --path, non-interactive)
+  -v, --verbose           Also write the full console output to verbose.log in the project
+                          directory (chmod 600, like typo3-credentials.txt - it can contain
+                          the admin password printed at the end of a run)
   -h, --help              Show this help
   --version               Show script version
 
@@ -83,18 +84,6 @@ for arg in "$@"; do
       CURRENT_OPTION=""
       ADMIN_EMAIL="${arg#*=}"
       ;;
-    --beuser=*)
-      CURRENT_OPTION=""
-      BE_USER="${arg#*=}"
-      ;;
-    --bepass=*)
-      CURRENT_OPTION=""
-      BE_PASSWORD="${arg#*=}"
-      ;;
-    --bemail=*)
-      CURRENT_OPTION=""
-      BE_EMAIL="${arg#*=}"
-      ;;
     --require=*)
       CURRENT_OPTION="require"
       COMPOSER_REQUIREMENTS+=("${arg#*=}")
@@ -103,13 +92,17 @@ for arg in "$@"; do
       CURRENT_OPTION="extension"
       EXTENSION_PATHS+=("${arg#*=}")
       ;;
-    --cleanup)
-      CURRENT_OPTION=""
+    --cleanup|--clear|--c)
+      CURRENT_OPTION="cleanup_target"
       CLEANUP=1
       ;;
     --list)
       CURRENT_OPTION=""
       LIST=1
+      ;;
+    -v|--verbose)
+      CURRENT_OPTION=""
+      VERBOSE=1
       ;;
     -h|--help)
       usage
@@ -131,6 +124,9 @@ for arg in "$@"; do
           ;;
         extension)
           EXTENSION_PATHS+=("$arg")
+          ;;
+        cleanup_target)
+          CLEANUP_TARGETS+=("$arg")
           ;;
         *)
           echo "Unexpected argument: $arg" >&2
@@ -161,13 +157,46 @@ command -v docker >/dev/null 2>&1 || { echo "Error: docker is not installed or n
 command -v ddev >/dev/null 2>&1 || { echo "Error: ddev is not installed or not in PATH." >&2; exit 1; }
 docker info >/dev/null 2>&1 || { echo "Error: docker daemon is not running." >&2; exit 1; }
 
-PASSWORD_CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#*%-_'
+PASSWORD_CHARS_UPPER='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+PASSWORD_CHARS_LOWER='abcdefghijklmnopqrstuvwxyz'
+PASSWORD_CHARS_DIGIT='0123456789'
+PASSWORD_CHARS_SPECIAL='#*%-_'
+PASSWORD_CHARS="${PASSWORD_CHARS_UPPER}${PASSWORD_CHARS_LOWER}${PASSWORD_CHARS_DIGIT}${PASSWORD_CHARS_SPECIAL}"
 generate_password() {
-  local length=20 password="" i
-  for ((i = 0; i < length; i++)); do
-    password+="${PASSWORD_CHARS:RANDOM % ${#PASSWORD_CHARS}:1}"
+  local length=20
+  local -a chars=()
+  local i j tmp
+
+  # TYPO3's default password policy requires at least one upper/lower/digit/special
+  # character. A uniform draw over the full charset can miss a class by chance
+  # (~20% odds of no special char in 20 draws) and TYPO3 then rejects it outright,
+  # so guarantee one of each first and fill/shuffle the rest.
+  chars+=("${PASSWORD_CHARS_UPPER:RANDOM % ${#PASSWORD_CHARS_UPPER}:1}")
+  chars+=("${PASSWORD_CHARS_LOWER:RANDOM % ${#PASSWORD_CHARS_LOWER}:1}")
+  chars+=("${PASSWORD_CHARS_DIGIT:RANDOM % ${#PASSWORD_CHARS_DIGIT}:1}")
+  chars+=("${PASSWORD_CHARS_SPECIAL:RANDOM % ${#PASSWORD_CHARS_SPECIAL}:1}")
+  for ((i = ${#chars[@]}; i < length; i++)); do
+    chars+=("${PASSWORD_CHARS:RANDOM % ${#PASSWORD_CHARS}:1}")
   done
-  echo "$password"
+
+  for ((i = length - 1; i > 0; i--)); do
+    j=$((RANDOM % (i + 1)))
+    tmp="${chars[$i]}"
+    chars[$i]="${chars[$j]}"
+    chars[$j]="$tmp"
+  done
+
+  printf '%s' "${chars[@]}"
+}
+
+# Locks a file down like typo3-credentials.txt: not group/world-readable, and
+# git-ignored if the project has a .gitignore. Used for anything that can end up
+# containing the credentials printed at the end of a run.
+secure_file() {
+  chmod 600 "$1"
+  if [[ -f .gitignore ]] && ! grep -qxF "$1" .gitignore; then
+    echo "$1" >> .gitignore
+  fi
 }
 
 # --- cleanup mode -------------------------------------------------------------
@@ -178,6 +207,7 @@ get_typo3_version() {
   local v=""
   if [[ -f "$lock" ]]; then
     v="$(grep -A2 '"name": *"typo3/cms-core"' "$lock" | grep '"version"' | head -1 | sed -E 's/.*"version": *"([^"]+)".*/\1/')"
+    v="${v#v}" # composer.lock stores it as e.g. "v13.4.34" (git-tag style)
   fi
   echo "${v:-unknown}"
 }
@@ -219,27 +249,24 @@ run_list() {
   done
 }
 
-run_cleanup() {
-  local scan_dir="${BASE_PATH%/}"
-  [[ -d "$scan_dir" ]] || { echo "Error: '$scan_dir' does not exist." >&2; exit 1; }
+confirm() {
+  local answer
+  read -rp "$1 [y/N] " answer
+  [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
 
-  local -a NAMES=() ITEMS=()
-  local name version
-  while IFS=$'\t' read -r name version; do
-    NAMES+=("$name")
-    ITEMS+=("TYPO3 V${version} | ${name}")
-  done < <(find_instances "$scan_dir")
+abort() {
+  echo "Aborted, nothing deleted."
+  exit 0
+}
 
-  if [[ ${#NAMES[@]} -eq 0 ]]; then
-    echo "No typo3-ddev-setup instances found in '${scan_dir}'."
-    exit 0
-  fi
-
-  if [[ ! -t 0 ]]; then
-    echo "Error: --cleanup needs an interactive terminal (arrow keys / space / enter)." >&2
-    exit 1
-  fi
-
+# Runs the interactive multi-select checklist over the caller's ITEMS/NAMES
+# arrays and appends the chosen names to the caller's TO_DELETE array (same
+# dynamic-scoping convention as draw_menu/restore_tty below - all three expect
+# the caller's locals, not their own copies). Called directly rather than via
+# command/process substitution so 'q' can abort the whole script, not just a
+# subshell. Requires a real terminal.
+select_via_checklist() {
   local total=${#ITEMS[@]}
   local -a SELECTED=()
   local i CURSOR=0
@@ -291,8 +318,7 @@ run_cleanup() {
       q|Q)
         restore_tty
         trap - EXIT
-        echo "Aborted, nothing deleted."
-        exit 0
+        abort
         ;;
     esac
     printf "\033[%dA" "$total"
@@ -302,14 +328,76 @@ run_cleanup() {
   restore_tty
   trap - EXIT
 
-  local -a TO_DELETE=()
   for i in "${!ITEMS[@]}"; do
     [[ "${SELECTED[$i]}" == "1" ]] && TO_DELETE+=("${NAMES[$i]}")
   done
 
-  if [[ ${#TO_DELETE[@]} -eq 0 ]]; then
-    echo "Nothing selected, nothing deleted."
+  # Without this, a run where nothing got selected ends on a failed [[ ]] (the
+  # last loop iteration), and under `set -e` a function call - unlike the same
+  # loop written inline - aborts the whole script on that non-zero return.
+  return 0
+}
+
+run_cleanup() {
+  local scan_dir="${BASE_PATH%/}"
+  [[ -d "$scan_dir" ]] || { echo "Error: '$scan_dir' does not exist." >&2; exit 1; }
+
+  local -a NAMES=() ITEMS=()
+  local name version
+  while IFS=$'\t' read -r name version; do
+    NAMES+=("$name")
+    ITEMS+=("TYPO3 V${version} | ${name}")
+  done < <(find_instances "$scan_dir")
+
+  # If one or more targets were given (--c ID [ID...]), narrow down to instances
+  # whose name contains any of them - e.g. the 4-char suffix of an auto-generated
+  # name - instead of showing everything found under $scan_dir.
+  if [[ ${#CLEANUP_TARGETS[@]} -gt 0 ]]; then
+    local -a matched_names=() matched_items=()
+    local target matched i
+    for i in "${!NAMES[@]}"; do
+      matched=0
+      for target in "${CLEANUP_TARGETS[@]}"; do
+        [[ "${NAMES[$i]}" == *"$target"* ]] && matched=1 && break
+      done
+      [[ "$matched" -eq 1 ]] && matched_names+=("${NAMES[$i]}") && matched_items+=("${ITEMS[$i]}")
+    done
+    NAMES=("${matched_names[@]}")
+    ITEMS=("${matched_items[@]}")
+  fi
+
+  if [[ ${#NAMES[@]} -eq 0 ]]; then
+    if [[ ${#CLEANUP_TARGETS[@]} -gt 0 ]]; then
+      echo "No instance matching ${CLEANUP_TARGETS[*]} found in '${scan_dir}'."
+    else
+      echo "No typo3-ddev-setup instances found in '${scan_dir}'."
+    fi
     exit 0
+  fi
+
+  if [[ ! -t 0 ]]; then
+    echo "Error: --cleanup needs an interactive terminal (arrow keys / space / enter)." >&2
+    exit 1
+  fi
+
+  local -a TO_DELETE=()
+
+  # Only one candidate - no point showing a single-item checklist, just confirm it.
+  if [[ ${#NAMES[@]} -eq 1 ]]; then
+    echo "Found: ${ITEMS[0]}"
+    confirm "Are you sure you want to remove it?" || abort
+    TO_DELETE=("${NAMES[0]}")
+  else
+    select_via_checklist
+
+    if [[ ${#TO_DELETE[@]} -eq 0 ]]; then
+      echo "Nothing selected, nothing deleted."
+      exit 0
+    fi
+
+    echo "Are you sure you want to remove the following instances?"
+    printf '  - %s\n' "${TO_DELETE[@]}"
+    confirm "Proceed?" || abort
   fi
 
   echo
@@ -365,13 +453,6 @@ case "$T3_MAJOR" in
     ;;
 esac
 
-# backend:user:create was only introduced in TYPO3 core 12.2 - v11 has no native
-# equivalent, so fail fast here instead of after a full install.
-if [[ -n "$BE_USER" && "$T3_MAJOR" -eq 11 ]]; then
-  echo "Error: --beuser is not supported for --release=11 (no 'backend:user:create' CLI command in TYPO3 11), see docs/backend-users.md." >&2
-  exit 1
-fi
-
 # typo3/cms-base-distribution itself only gets a handful of releases (it just bundles
 # the real typo3/cms-* packages via "$COMPOSER_CONSTRAINT"), so it can't be pinned to
 # an exact minor/patch version directly. If the user asked for one, install via the
@@ -395,15 +476,6 @@ if [[ -z "$ADMIN_EMAIL" ]]; then
   ADMIN_EMAIL="admin@${PROJECT_NAME}.ddev.site"
 fi
 
-if [[ -n "$BE_USER" ]]; then
-  if [[ -z "$BE_PASSWORD" ]]; then
-    BE_PASSWORD="$(generate_password)"
-  fi
-  if [[ -z "$BE_EMAIL" ]]; then
-    BE_EMAIL="${BE_USER}@${PROJECT_NAME}.ddev.site"
-  fi
-fi
-
 PROJECT_DIR="${BASE_PATH%/}/${PROJECT_NAME}"
 
 if [[ -e "$PROJECT_DIR" ]]; then
@@ -414,6 +486,15 @@ fi
 echo "==> Creating TYPO3 ${T3_VERSION} project '${PROJECT_NAME}' in ${PROJECT_DIR}"
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
+
+if [[ "$VERBOSE" -eq 1 ]]; then
+  # 'ddev composer create-project' refuses to run unless the project directory is
+  # empty (bar a small whitelist), so the log can't live in there yet. Write it one
+  # level up for now and move it in once composer is done - see below.
+  VERBOSE_LOG_TMP="$(mktemp ../.verbose-log.XXXXXX)"
+  exec > >(tee -a "$VERBOSE_LOG_TMP") 2>&1
+  echo "==> Verbose logging enabled - full output also written to ${PROJECT_DIR}/verbose.log"
+fi
 
 # --- DDEV setup --------------------------------------------------------------
 ddev config \
@@ -454,6 +535,11 @@ else
   echo "==> Installing with --no-security-blocking: an older pinned release may be flagged"
   echo "    by Composer's security-advisory check, and that block is bypassed on purpose here."
   ddev composer install --no-interaction --no-security-blocking
+fi
+
+if [[ "$VERBOSE" -eq 1 ]]; then
+  VERBOSE_LOG="verbose.log"
+  mv "$VERBOSE_LOG_TMP" "$VERBOSE_LOG"
 fi
 
 # --- Add mounted extension paths to composer.json packages ------------------------------------------
@@ -550,17 +636,6 @@ if [[ -f "$SETTINGS_FILE" ]]; then
   printf '%s\n' "$SETTINGS_PHP" > "$SETTINGS_FILE"
 fi
 
-# --- Additional backend user (optional) ----------------------------------------
-if [[ -n "$BE_USER" ]]; then
-  echo "==> Creating additional admin backend user '${BE_USER}'"
-  ddev exec ./vendor/bin/typo3 backend:user:create \
-    --username="$BE_USER" \
-    --password="$BE_PASSWORD" \
-    --email="$BE_EMAIL" \
-    --admin \
-    --no-interaction
-fi
-
 # --- Credentials file ---------------------------------------------------------
 # Written at the project root (outside the "public" docroot) so it's never web-accessible.
 CREDENTIALS_FILE="typo3-credentials.txt"
@@ -576,20 +651,12 @@ Admin password: ${ADMIN_PASSWORD}
 Admin email:    ${ADMIN_EMAIL}
 CREDS
 
-if [[ -n "$BE_USER" ]]; then
-  cat >> "$CREDENTIALS_FILE" <<CREDS
+secure_file "$CREDENTIALS_FILE"
 
-Additional backend user (admin):
-Username:       ${BE_USER}
-Password:       ${BE_PASSWORD}
-Email:          ${BE_EMAIL}
-CREDS
-fi
-
-chmod 600 "$CREDENTIALS_FILE"
-
-if [[ -f .gitignore ]] && ! grep -qxF "$CREDENTIALS_FILE" .gitignore; then
-  echo "$CREDENTIALS_FILE" >> .gitignore
+if [[ "$VERBOSE" -eq 1 ]]; then
+  # verbose.log can contain the passwords printed below, same sensitivity as
+  # typo3-credentials.txt - lock it down the same way.
+  secure_file "$VERBOSE_LOG"
 fi
 
 echo
@@ -598,9 +665,10 @@ echo "URL:         https://${PROJECT_NAME}.ddev.site"
 echo "Backend:     https://${PROJECT_NAME}.ddev.site/typo3"
 echo "Admin:       ${ADMIN_USER}"
 echo "Password:    ${ADMIN_PASSWORD}"
-if [[ -n "$BE_USER" ]]; then
-  echo "Extra user:  ${BE_USER} / ${BE_PASSWORD}"
-fi
 echo "Credentials: ${PROJECT_DIR}/${CREDENTIALS_FILE}"
+if [[ "$VERBOSE" -eq 1 ]]; then
+  echo "Verbose log: ${PROJECT_DIR}/${VERBOSE_LOG}"
+fi
+echo "To clean up this instance: ./typo3-ddev-setup.sh --c ${SUFFIX:-$PROJECT_NAME}"
 
 ddev launch /typo3 >/dev/null 2>&1 || echo "Note: could not auto-open the browser, open the backend URL above manually."

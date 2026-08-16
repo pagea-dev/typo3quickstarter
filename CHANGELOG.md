@@ -5,6 +5,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-16
+
+### Added
+
+- `docs/CONTRIBUTING.md` with PR guidelines (branch from an up-to-date `main`, test the script for real, keep the executable bit, update docs/CHANGELOG for user-facing changes), linked from README.md.
+- `-v`/`--verbose` writes the full console output to `verbose.log` in the project directory (`chmod 600` + `.gitignore`, same as `typo3-credentials.txt` - it can contain the same passwords). Starts logging once the project directory exists, and moves the log in from a temp location once Composer is done with it, since `ddev composer create-project` requires an empty target directory. See [docs/verbose-logging.md](docs/verbose-logging.md).
+- Compatibility section in README.md: tested on Ubuntu-based Linux and WSL; macOS not yet supported.
+- `--clear` and `--c` as aliases for `--cleanup`.
+- `--cleanup`/`--clear`/`--c` now accept one or more name/ID substrings (e.g. `--c 0392`) to target specific instances directly, narrowing the checklist or skipping straight to the single-instance confirmation. Every "Done" summary now prints the ready-to-use command for the instance just created, e.g. `To clean up this instance: ./typo3-ddev-setup.sh --c 0392`.
+- README "More examples" section: installing several Composer packages plus a custom admin login in one command, and pinning an exact TYPO3 patch release alongside a specific extension version.
+
+### Changed
+
+- `--cleanup` now asks for confirmation before deleting anything, instead of deleting as soon as you press Enter in the checklist. With exactly one instance found, it skips the checklist and asks "Are you sure you want to remove it?" directly; with more than one, confirming the checklist selection shows "Are you sure you want to remove the following instances?" with the list before proceeding.
+
+### Fixed
+
+- `generate_password` now guarantees at least one uppercase, lowercase, digit, and special character instead of drawing all 20 characters uniformly at random - the latter had roughly a 1-in-5 chance of producing a password with no special character, which TYPO3's default password policy rejects outright, failing the whole setup.
+- `--list`/`--cleanup` showed a doubled "V" (e.g. "TYPO3 Vv13.4.34") for real instances, since `composer.lock` stores the version with a leading `v` (git-tag style) that wasn't stripped.
+
+### Removed
+
+- `--beuser`/`--bepass`/`--bemail` (added in 0.2.0). Both this and `--admin-user`/`--admin-password`/`--admin-email` created an admin backend user, and no non-admin/editor role was ever planned, so the two overlapping flag sets were pure duplication. `--admin-*` remains as the one way to control the backend user's credentials.
+
 ## [0.2.0] - 2026-08-16
 
 ### Added

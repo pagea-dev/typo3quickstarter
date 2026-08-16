@@ -21,13 +21,20 @@ The script checks for both and bails out early with a clear error if either is m
 
 ## Installation
 
+Grab the latest release — it's a single file with no other dependencies beyond `bash`, `docker`, and `ddev`:
+
+```bash
+curl -LO https://github.com/pagea-dev/typo3quickstarter/releases/latest/download/typo3-ddev-setup.sh
+chmod +x typo3-ddev-setup.sh
+```
+
+Or clone the repo instead if you also want `docs/`, `CHANGELOG.md`, etc.:
+
 ```bash
 git clone https://github.com/pagea-dev/typo3quickstarter.git
 cd typo3quickstarter
 chmod +x typo3-ddev-setup.sh
 ```
-
-Or just grab the single file — it has no other dependencies beyond `bash`, `docker`, and `ddev`.
 
 ## Usage
 
@@ -59,6 +66,7 @@ Backend:     https://typo3-v13-a1b2.ddev.site/typo3
 Admin:       admin
 Password:    Ddev-482913605-Aa1
 Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
+To clean up this instance: ./typo3-ddev-setup.sh --c a1b2
 ```
 
 > The very first time DDEV adds a new `*.ddev.site` hostname to your system, it needs `sudo` to update `/etc/hosts` — you'll get a normal password prompt for that. It only happens once per hostname.
@@ -70,27 +78,53 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 | `-r=N`, `--release=N` | TYPO3 version to install — see [docs/versions.md](docs/versions.md) | highest supported |
 | `--name=NAME` | DDEV project name | auto-generated, e.g. `typo3-v13-a1b2` |
 | `--path=DIR` | Where the project folder is created (also used by `--cleanup`) | current directory |
-| `--admin-user`, `--admin-password`, `--admin-email` | Primary admin backend user — see [docs/backend-users.md](docs/backend-users.md) | `admin` / random / `admin@<project>.ddev.site` |
-| `--beuser`, `--bepass`, `--bemail` | Create an additional admin backend user — see [docs/backend-users.md](docs/backend-users.md) | — |
+| `--admin-user`, `--admin-password`, `--admin-email` | Admin backend user — see [docs/backend-users.md](docs/backend-users.md) | `admin` / random / `admin@<project>.ddev.site` |
 | `--require=PKG` | Install extra Composer packages after setup — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--extension=PATH` | Mount and require a local extension for development — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--list` | List all instances this script created — see [docs/instances.md](docs/instances.md) | — |
-| `--cleanup` | Interactively remove previously created instances — see [docs/instances.md](docs/instances.md) | — |
+| `--cleanup`, `--clear`, `--c` [TARGET...] | Interactively remove previously created instances, optionally narrowed down to name/ID matches — see [docs/instances.md](docs/instances.md) | — |
+| `-v`, `--verbose` | Also write the full console output to `verbose.log` — see [docs/verbose-logging.md](docs/verbose-logging.md) | — |
 | `-h`, `--help` | Show usage | — |
-| `--version` | Show the script's own version — see [docs/versioning.md](docs/versioning.md) | — |
+| `--version` | Show the script's own version — see [docs/information.md](docs/information.md) | — |
+
+### More examples
+
+Latest TYPO3 14 with a couple of extensions and a personal admin login, in one command:
+
+```bash
+./typo3-ddev-setup.sh --release=14 --require=b13/container georgringer/news --admin-user=lukas --admin-password='Correct-Horse-1' --admin-email=lukas@example.com
+```
+
+An exact TYPO3 12 patch release, plus a specific version of an extension (`--require` takes any Composer constraint, same as `composer require vendor/package:constraint`):
+
+```bash
+./typo3-ddev-setup.sh --release=12.4.20 --require=georgringer/news:^11.0
+```
 
 ## Documentation
 
 - [docs/versions.md](docs/versions.md) — selecting a version, pinning an exact patch release, the `--no-security-blocking` security note, TYPO3 v11 quirks
-- [docs/backend-users.md](docs/backend-users.md) — the primary admin user and additional backend users via `--beuser`
+- [docs/backend-users.md](docs/backend-users.md) — the admin backend user
 - [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
 - [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
-- [docs/versioning.md](docs/versioning.md) — the script's own `--version` and the release process
+- [docs/verbose-logging.md](docs/verbose-logging.md) — `--verbose`/`verbose.log`
+- [docs/information.md](docs/information.md) — the script's own `--version` and the release process
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — guidelines for PRs
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each version
+
+## Contributing
+
+Sending a PR? Please read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) first - in short: branch from an up-to-date `main`, test the script for real before opening the PR, and keep the executable bit intact.
+
+## Compatibility
+
+Actively tested on Ubuntu-based Linux (e.g. Zorin OS) and Windows via WSL. Should work anywhere `bash`, `docker`, and `ddev` do, but hasn't been verified elsewhere.
+
+macOS isn't tested or supported yet - happy to take a PR from someone who wants to develop and test it there (see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)).
 
 ## Notes
 
-- `typo3-credentials.txt` is written outside the `public/` docroot, so it's never reachable over HTTP, and it gets `chmod 600` plus an entry in `.gitignore` automatically.
+- `typo3-credentials.txt` is written outside the `public/` docroot, so it's never reachable over HTTP, and it gets `chmod 600` plus an entry in `.gitignore` automatically. `verbose.log` (with `--verbose`) gets the same treatment.
 
 ## License
 
