@@ -55,5 +55,3 @@ If you just want the latest, patched version, omit the patch level (`--release=1
 ## TYPO3 v11 note
 
 TYPO3 v11's native `typo3 setup` CLI command crashes on fresh installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). For `--release=11` the script automatically falls back to the legacy `typo3cms install:setup` installer instead, which doesn't have this bug.
-
-v11 also lacks a native CLI command for creating additional backend users — see [backend-users.md](backend-users.md) for what that means for `--beuser`.

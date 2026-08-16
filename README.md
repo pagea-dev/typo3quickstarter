@@ -77,8 +77,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 | `-r=N`, `--release=N` | TYPO3 version to install — see [docs/versions.md](docs/versions.md) | highest supported |
 | `--name=NAME` | DDEV project name | auto-generated, e.g. `typo3-v13-a1b2` |
 | `--path=DIR` | Where the project folder is created (also used by `--cleanup`) | current directory |
-| `--admin-user`, `--admin-password`, `--admin-email` | Primary admin backend user — see [docs/backend-users.md](docs/backend-users.md) | `admin` / random / `admin@<project>.ddev.site` |
-| `--beuser`, `--bepass`, `--bemail` | Create an additional admin backend user — see [docs/backend-users.md](docs/backend-users.md) | — |
+| `--admin-user`, `--admin-password`, `--admin-email` | Admin backend user — see [docs/backend-users.md](docs/backend-users.md) | `admin` / random / `admin@<project>.ddev.site` |
 | `--require=PKG` | Install extra Composer packages after setup — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--extension=PATH` | Mount and require a local extension for development — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--list` | List all instances this script created — see [docs/instances.md](docs/instances.md) | — |
@@ -90,7 +89,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 ## Documentation
 
 - [docs/versions.md](docs/versions.md) — selecting a version, pinning an exact patch release, the `--no-security-blocking` security note, TYPO3 v11 quirks
-- [docs/backend-users.md](docs/backend-users.md) — the primary admin user and additional backend users via `--beuser`
+- [docs/backend-users.md](docs/backend-users.md) — the admin backend user
 - [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
 - [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
 - [docs/verbose-logging.md](docs/verbose-logging.md) — `--verbose`/`verbose.log`

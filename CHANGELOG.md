@@ -16,6 +16,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 
 - `generate_password` now guarantees at least one uppercase, lowercase, digit, and special character instead of drawing all 20 characters uniformly at random - the latter had roughly a 1-in-5 chance of producing a password with no special character, which TYPO3's default password policy rejects outright, failing the whole setup.
 
+### Removed
+
+- `--beuser`/`--bepass`/`--bemail` (added in 0.2.0). Both this and `--admin-user`/`--admin-password`/`--admin-email` created an admin backend user, and no non-admin/editor role was ever planned, so the two overlapping flag sets were pure duplication. `--admin-*` remains as the one way to control the backend user's credentials.
+
 ## [0.2.0] - 2026-08-16
 
 ### Added

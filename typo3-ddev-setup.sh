@@ -11,9 +11,6 @@ BASE_PATH="."
 ADMIN_USER="admin"
 ADMIN_PASSWORD=""
 ADMIN_EMAIL=""
-BE_USER=""
-BE_PASSWORD=""
-BE_EMAIL=""
 CLEANUP=0
 LIST=0
 VERBOSE=0
@@ -39,10 +36,6 @@ Options:
   --admin-user=USER       Backend admin username (default: admin)
   --admin-password=PASS   Backend admin password (default: randomly generated)
   --admin-email=MAIL      Backend admin email (default: admin@<project>.ddev.site)
-  --beuser=USER           Create an additional admin backend user with this username
-                          (not supported for --release=11, see docs/backend-users.md)
-  --bepass=PASS           Password for --beuser (default: randomly generated)
-  --bemail=MAIL           Email for --beuser (default: <beuser>@<project>.ddev.site)
   --require=PKG           Install an extra Composer package after setup. Repeat the flag or
                           list several packages after one occurrence, space-separated.
   --extension=PATH        Mount a local extension directory and require it at :@dev for
@@ -53,7 +46,7 @@ Options:
   --list                  List all instances this script created (scans --path, non-interactive)
   -v, --verbose           Also write the full console output to verbose.log in the project
                           directory (chmod 600, like typo3-credentials.txt - it can contain
-                          the admin/backend-user passwords printed at the end of a run)
+                          the admin password printed at the end of a run)
   -h, --help              Show this help
   --version               Show script version
 
@@ -86,18 +79,6 @@ for arg in "$@"; do
     --admin-email=*)
       CURRENT_OPTION=""
       ADMIN_EMAIL="${arg#*=}"
-      ;;
-    --beuser=*)
-      CURRENT_OPTION=""
-      BE_USER="${arg#*=}"
-      ;;
-    --bepass=*)
-      CURRENT_OPTION=""
-      BE_PASSWORD="${arg#*=}"
-      ;;
-    --bemail=*)
-      CURRENT_OPTION=""
-      BE_EMAIL="${arg#*=}"
       ;;
     --require=*)
       CURRENT_OPTION="require"
@@ -396,13 +377,6 @@ case "$T3_MAJOR" in
     ;;
 esac
 
-# backend:user:create was only introduced in TYPO3 core 12.2 - v11 has no native
-# equivalent, so fail fast here instead of after a full install.
-if [[ -n "$BE_USER" && "$T3_MAJOR" -eq 11 ]]; then
-  echo "Error: --beuser is not supported for --release=11 (no 'backend:user:create' CLI command in TYPO3 11), see docs/backend-users.md." >&2
-  exit 1
-fi
-
 # typo3/cms-base-distribution itself only gets a handful of releases (it just bundles
 # the real typo3/cms-* packages via "$COMPOSER_CONSTRAINT"), so it can't be pinned to
 # an exact minor/patch version directly. If the user asked for one, install via the
@@ -424,15 +398,6 @@ fi
 
 if [[ -z "$ADMIN_EMAIL" ]]; then
   ADMIN_EMAIL="admin@${PROJECT_NAME}.ddev.site"
-fi
-
-if [[ -n "$BE_USER" ]]; then
-  if [[ -z "$BE_PASSWORD" ]]; then
-    BE_PASSWORD="$(generate_password)"
-  fi
-  if [[ -z "$BE_EMAIL" ]]; then
-    BE_EMAIL="${BE_USER}@${PROJECT_NAME}.ddev.site"
-  fi
 fi
 
 PROJECT_DIR="${BASE_PATH%/}/${PROJECT_NAME}"
@@ -595,17 +560,6 @@ if [[ -f "$SETTINGS_FILE" ]]; then
   printf '%s\n' "$SETTINGS_PHP" > "$SETTINGS_FILE"
 fi
 
-# --- Additional backend user (optional) ----------------------------------------
-if [[ -n "$BE_USER" ]]; then
-  echo "==> Creating additional admin backend user '${BE_USER}'"
-  ddev exec ./vendor/bin/typo3 backend:user:create \
-    --username="$BE_USER" \
-    --password="$BE_PASSWORD" \
-    --email="$BE_EMAIL" \
-    --admin \
-    --no-interaction
-fi
-
 # --- Credentials file ---------------------------------------------------------
 # Written at the project root (outside the "public" docroot) so it's never web-accessible.
 CREDENTIALS_FILE="typo3-credentials.txt"
@@ -620,16 +574,6 @@ Admin user:     ${ADMIN_USER}
 Admin password: ${ADMIN_PASSWORD}
 Admin email:    ${ADMIN_EMAIL}
 CREDS
-
-if [[ -n "$BE_USER" ]]; then
-  cat >> "$CREDENTIALS_FILE" <<CREDS
-
-Additional backend user (admin):
-Username:       ${BE_USER}
-Password:       ${BE_PASSWORD}
-Email:          ${BE_EMAIL}
-CREDS
-fi
 
 chmod 600 "$CREDENTIALS_FILE"
 
@@ -652,9 +596,6 @@ echo "URL:         https://${PROJECT_NAME}.ddev.site"
 echo "Backend:     https://${PROJECT_NAME}.ddev.site/typo3"
 echo "Admin:       ${ADMIN_USER}"
 echo "Password:    ${ADMIN_PASSWORD}"
-if [[ -n "$BE_USER" ]]; then
-  echo "Extra user:  ${BE_USER} / ${BE_PASSWORD}"
-fi
 echo "Credentials: ${PROJECT_DIR}/${CREDENTIALS_FILE}"
 if [[ "$VERBOSE" -eq 1 ]]; then
   echo "Verbose log: ${PROJECT_DIR}/${VERBOSE_LOG}"
