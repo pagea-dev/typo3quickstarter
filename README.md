@@ -132,6 +132,17 @@ macOS isn't tested or supported yet - happy to take a PR from someone who wants 
 
 - `typo3-credentials.txt` is written outside the `public/` docroot, so it's never reachable over HTTP, and it gets `chmod 600` plus an entry in `.gitignore` automatically. `verbose.log` (with `--verbose`) gets the same treatment.
 
+## Special thanks
+
+This project stands entirely on the shoulders of others' work:
+
+- [DDEV](https://ddev.com) — the local dev environment this whole script is built around.
+- [Docker](https://www.docker.com/) — the container runtime underneath DDEV.
+- [TYPO3](https://typo3.org) — the CMS this exists to spin up.
+- [TYPO3 Extension Kickstarter](https://github.com/FriendsOfTYPO3/kickstarter) — the interactive extension scaffolding used by `--with-git` (see [docs/with-git.md](docs/with-git.md)).
+
+Thanks to everyone building and maintaining these projects.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
