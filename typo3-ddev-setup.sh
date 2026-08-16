@@ -33,17 +33,66 @@ EOF
 
 for arg in "$@"; do
   case "$arg" in
-    --v=*) T3_VERSION="${arg#*=}" ;;
-    --name=*) PROJECT_NAME="${arg#*=}" ;;
-    --path=*) BASE_PATH="${arg#*=}" ;;
-    --admin-user=*) ADMIN_USER="${arg#*=}" ;;
-    --admin-password=*) ADMIN_PASSWORD="${arg#*=}" ;;
-    --admin-email=*) ADMIN_EMAIL="${arg#*=}" ;;
-    --require=*) COMPOSER_REQUIREMENTS+=("${arg#*=}") ;;
-    --extension=*) EXTENSION_PATHS+=("${arg#*=}") ;;
-    --cleanup) CLEANUP=1 ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown option: $arg" >&2; usage; exit 1 ;;
+    --v=*)
+      CURRENT_OPTION=""
+      T3_VERSION="${arg#*=}"
+      ;;
+    --name=*)
+      CURRENT_OPTION=""
+      PROJECT_NAME="${arg#*=}"
+      ;;
+    --path=*)
+      CURRENT_OPTION=""
+      BASE_PATH="${arg#*=}"
+      ;;
+    --admin-user=*)
+      CURRENT_OPTION=""
+      ADMIN_USER="${arg#*=}"
+      ;;
+    --admin-password=*)
+      CURRENT_OPTION=""
+      ADMIN_PASSWORD="${arg#*=}"
+      ;;
+    --admin-email=*)
+      CURRENT_OPTION=""
+      ADMIN_EMAIL="${arg#*=}"
+      ;;
+    --require=*)
+      CURRENT_OPTION="require"
+      COMPOSER_REQUIREMENTS+=("${arg#*=}")
+      ;;
+    --extension=*)
+      CURRENT_OPTION="extension"
+      EXTENSION_PATHS+=("${arg#*=}")
+      ;;
+    --cleanup)
+      CURRENT_OPTION=""
+      CLEANUP=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --*)
+      echo "Unknown option: $arg" >&2
+      usage
+      exit 1
+      ;;
+    *)
+      case "$CURRENT_OPTION" in
+        require)
+          COMPOSER_REQUIREMENTS+=("$arg")
+          ;;
+        extension)
+          EXTENSION_PATHS+=("$arg")
+          ;;
+        *)
+          echo "Unexpected argument: $arg" >&2
+          usage
+          exit 1
+          ;;
+      esac
+      ;;
   esac
 done
 
