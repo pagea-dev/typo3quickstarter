@@ -86,6 +86,7 @@ To clean up this instance: ./typo3-ddev-setup.sh --c a1b2
 | `--list` | List all instances this script created — see [docs/instances.md](docs/instances.md) | — |
 | `--cleanup`, `--clear`, `--c` [TARGET...] | Interactively remove previously created instances, optionally narrowed down to name/ID matches — see [docs/instances.md](docs/instances.md) | — |
 | `-v`, `--verbose` | Also write the full console output to `verbose.log` — see [docs/verbose-logging.md](docs/verbose-logging.md) | — |
+| `--with-git` | After setup, ask whether to `git init` the whole project or scaffold and version a new extension — see [docs/with-git.md](docs/with-git.md) | — |
 | `-h`, `--help` | Show usage | — |
 | `--version` | Show the script's own version — see [docs/information.md](docs/information.md) | — |
 
@@ -110,6 +111,7 @@ An exact TYPO3 12 patch release, plus a specific version of an extension (`--req
 - [docs/backend-users.md](docs/backend-users.md) — the admin backend user
 - [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
 - [docs/development-settings.md](docs/development-settings.md) — the always-on extras every instance gets: Scheduler/Extensions core extensions, `TYPO3_CONTEXT=Development`, debug settings
+- [docs/with-git.md](docs/with-git.md) — `--with-git`: version the whole project or scaffold and version a new extension
 - [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
 - [docs/verbose-logging.md](docs/verbose-logging.md) — `--verbose`/`verbose.log`
 - [docs/information.md](docs/information.md) — the script's own `--version` and the release process

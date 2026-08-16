@@ -21,6 +21,7 @@ ADMIN_EMAIL=""
 CLEANUP=0
 LIST=0
 VERBOSE=0
+WITH_GIT=0
 COMPOSER_REQUIREMENTS=()
 EXTENSION_PATHS=()
 CLEANUP_TARGETS=()
@@ -60,6 +61,10 @@ Options:
   -v, --verbose           Also write the full console output to verbose.log in the project
                           directory (chmod 600, like typo3-credentials.txt - it can contain
                           the admin password printed at the end of a run)
+  --with-git              After setup, ask (needs an interactive terminal) whether to put the
+                          whole project under git version control, or scaffold a brand-new
+                          extension under packages/<name> and version that alone instead.
+                          See docs/with-git.md.
   -h, --help              Show this help
   --version               Show script version
 
@@ -112,6 +117,10 @@ for arg in "$@"; do
     -v|--verbose)
       CURRENT_OPTION=""
       VERBOSE=1
+      ;;
+    --with-git)
+      CURRENT_OPTION=""
+      WITH_GIT=1
       ;;
     -h|--help)
       usage
@@ -179,6 +188,10 @@ done
 command -v docker >/dev/null 2>&1 || { echo "${C_RED}Error: docker is not installed or not in PATH.${C_RESET}" >&2; exit 1; }
 command -v ddev >/dev/null 2>&1 || { echo "${C_RED}Error: ddev is not installed or not in PATH.${C_RESET}" >&2; exit 1; }
 docker info >/dev/null 2>&1 || { echo "${C_RED}Error: docker daemon is not running.${C_RESET}" >&2; exit 1; }
+if [[ "$WITH_GIT" -eq 1 ]]; then
+  command -v git >/dev/null 2>&1 || { echo "${C_RED}Error: --with-git needs git, which is not installed or not in PATH.${C_RESET}" >&2; exit 1; }
+  [[ -t 0 ]] || { echo "${C_RED}Error: --with-git needs an interactive terminal to ask what to version.${C_RESET}" >&2; exit 1; }
+fi
 
 PASSWORD_CHARS_UPPER='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 PASSWORD_CHARS_LOWER='abcdefghijklmnopqrstuvwxyz'
@@ -754,6 +767,121 @@ if [[ "$VERBOSE" -eq 1 ]]; then
   # verbose.log can contain the passwords printed below, same sensitivity as
   # typo3-credentials.txt - lock it down the same way.
   secure_file "$VERBOSE_LOG"
+fi
+
+# --- --with-git: optional version control setup -------------------------------
+if [[ "$WITH_GIT" -eq 1 ]]; then
+  echo
+  echo "${C_CYAN}==> --with-git: what should be put under version control?${C_RESET}"
+  echo "  1) The whole TYPO3 project"
+  echo "  2) A new extension only (scaffolded fresh under packages/<name>)"
+  GIT_CHOICE=""
+  read -rp "Choice [1/2]: " GIT_CHOICE
+
+  if [[ "$GIT_CHOICE" == "1" ]]; then
+    echo "${C_CYAN}==> Initializing git for the whole project${C_RESET}"
+    git init >/dev/null
+    # typo3/cms-base-distribution already ships a .gitignore covering vendor/,
+    # var/ (except var/labels), and most of public/ - append what it doesn't:
+    # DDEV's own project config, credentials/logs, and settings.php (DB password,
+    # encryptionKey in plaintext). packages/ is deliberately left trackable.
+    {
+      echo ""
+      echo "# Added by typo3-ddev-setup.sh --with-git"
+      echo "/.ddev/"
+      echo "/${CREDENTIALS_FILE}"
+      echo "/verbose.log"
+      echo "/${SETTINGS_FILE}"
+    } >> .gitignore
+    git add -A
+    if git commit -m "Initial commit" >/dev/null 2>&1; then
+      echo "${C_GREEN}Git repository initialized and committed at ${PROJECT_DIR}${C_RESET}"
+    else
+      echo "${C_YELLOW}Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged.${C_RESET}"
+    fi
+  elif [[ "$GIT_CHOICE" == "2" ]]; then
+    EXT_KEY=""
+    while [[ -z "$EXT_KEY" ]]; do
+      read -rp "Extension key (lowercase, e.g. my_extension): " EXT_KEY
+      if [[ ! "$EXT_KEY" =~ ^[a-z][a-z0-9_]*$ ]]; then
+        echo "${C_RED}Invalid extension key - must start with a lowercase letter, and contain only lowercase letters, digits, underscores.${C_RESET}"
+        EXT_KEY=""
+      fi
+    done
+
+    EXT_DIR="packages/${EXT_KEY}"
+    if [[ -e "$EXT_DIR" ]]; then
+      echo "${C_RED}Error: ${EXT_DIR} already exists.${C_RESET}" >&2
+      exit 1
+    fi
+    mkdir -p "$EXT_DIR"
+
+    # Composer package name: dashes instead of underscores, standard TYPO3 convention.
+    EXT_PACKAGE="local/${EXT_KEY//_/-}"
+    # PSR-4 namespace: StudlyCase from the snake_case key (my_extension -> MyExtension).
+    EXT_NAMESPACE=""
+    IFS='_' read -ra EXT_WORDS <<< "$EXT_KEY"
+    for word in "${EXT_WORDS[@]}"; do
+      EXT_NAMESPACE+="${word^}"
+    done
+
+    cat > "${EXT_DIR}/composer.json" <<EOF
+{
+    "name": "${EXT_PACKAGE}",
+    "type": "typo3-cms-extension",
+    "description": "",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "typo3/cms-core": "${COMPOSER_CONSTRAINT}"
+    },
+    "extra": {
+        "typo3/cms": {
+            "extension-key": "${EXT_KEY}"
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Local\\\\${EXT_NAMESPACE}\\\\": "Classes/"
+        }
+    }
+}
+EOF
+
+    cat > "${EXT_DIR}/ext_emconf.php" <<EOF
+<?php
+
+\$EM_CONF[\$_EXTKEY] = [
+    'title' => '${EXT_KEY}',
+    'description' => '',
+    'category' => 'plugin',
+    'state' => 'alpha',
+    'version' => '1.0.0',
+    'constraints' => [
+        'depends' => [
+            'typo3' => '${COMPOSER_CONSTRAINT#^}',
+        ],
+    ],
+];
+EOF
+
+    echo "${C_CYAN}==> Registering new extension ${EXT_KEY} (${EXT_PACKAGE})${C_RESET}"
+    ddev composer config "repositories.${EXT_KEY}" path "$EXT_DIR"
+    ddev composer require "${EXT_PACKAGE}:@dev" --no-interaction --no-security-blocking
+    ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
+
+    (
+      cd "$EXT_DIR"
+      git init >/dev/null
+      git add -A
+      if git commit -m "Initial commit" >/dev/null 2>&1; then
+        echo "${C_GREEN}Git repository initialized and committed at ${PROJECT_DIR}/${EXT_DIR}${C_RESET}"
+      else
+        echo "${C_YELLOW}Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged.${C_RESET}"
+      fi
+    )
+  else
+    echo "${C_YELLOW}--with-git: invalid choice, skipping.${C_RESET}"
+  fi
 fi
 
 echo
