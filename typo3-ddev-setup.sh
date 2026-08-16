@@ -9,6 +9,7 @@ ADMIN_USER="admin"
 ADMIN_PASSWORD=""
 ADMIN_EMAIL=""
 CLEANUP=0
+COMPOSER_REQUIREMENTS=()
 
 usage() {
   cat <<'EOF'
@@ -37,6 +38,7 @@ for arg in "$@"; do
     --admin-user=*) ADMIN_USER="${arg#*=}" ;;
     --admin-password=*) ADMIN_PASSWORD="${arg#*=}" ;;
     --admin-email=*) ADMIN_EMAIL="${arg#*=}" ;;
+    --require=*) COMPOSER_REQUIREMENTS+=("${arg#*=}") ;;
     --cleanup) CLEANUP=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; usage; exit 1 ;;
@@ -247,6 +249,16 @@ ddev start
 
 # --- TYPO3 installation via composer ------------------------------------------
 ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
+
+# --- Additional composer packages ------------------------------------------
+if [[ ${#COMPOSER_REQUIREMENTS[@]} -gt 0 ]]; then
+  echo "==> Installing additional Composer requirements:"
+  printf '    - %s\n' "${COMPOSER_REQUIREMENTS[@]}"
+
+  ddev composer require \
+    "${COMPOSER_REQUIREMENTS[@]}" \
+    --no-interaction
+fi
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------
 if [[ "$T3_VERSION" -eq 11 ]]; then
