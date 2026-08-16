@@ -5,9 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-16
+
 ### Added
 
 - Colored output based on message status: progress steps in cyan, errors in red, warnings in yellow, the final success summary in green. Auto-disables when stdout isn't a terminal (piping, `--list` in scripts/CI) or `--verbose` is set (keeps `verbose.log` free of escape codes), and can be forced off with `NO_COLOR=1`.
+- A welcome banner (tool name, version, author, repo link) before every actual install run.
+- [docs/examples.md](docs/examples.md) - practical recipes for common scenarios (pinning a patch release, custom admin logins, extensions, cleanup, and more), linked from the README.
 
 ### Fixed
 

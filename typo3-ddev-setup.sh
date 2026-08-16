@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
-SCRIPT_VERSION="0.3.0"
+SCRIPT_VERSION="0.4.0"
 
 # --- Colors -------------------------------------------------------------------
 # Whether stdout is a real terminal, captured now - before --verbose (parsed
@@ -445,6 +445,10 @@ if [[ "$CLEANUP" -eq 1 ]]; then
   run_cleanup
   exit 0
 fi
+
+echo "${C_BOLD}${C_CYAN}typo3quickstarter${C_RESET} ${C_GREEN}v${SCRIPT_VERSION}${C_RESET} ${C_YELLOW}by Lukas Dörr${C_RESET}"
+echo "${C_CYAN}https://github.com/pagea-dev/typo3quickstarter${C_RESET}"
+echo
 
 # --- Version map --------------------------------------------------------
 # Ordered lowest to highest. Add further versions here once verified with this script.
