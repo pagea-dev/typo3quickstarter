@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
-SCRIPT_VERSION="0.2.0"
+SCRIPT_VERSION="0.3.0"
 
 # --- Defaults ---------------------------------------------------------------
 T3_VERSION=""
