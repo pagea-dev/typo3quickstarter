@@ -21,13 +21,20 @@ The script checks for both and bails out early with a clear error if either is m
 
 ## Installation
 
+Grab the latest release — it's a single file with no other dependencies beyond `bash`, `docker`, and `ddev`:
+
+```bash
+curl -LO https://github.com/pagea-dev/typo3quickstarter/releases/latest/download/typo3-ddev-setup.sh
+chmod +x typo3-ddev-setup.sh
+```
+
+Or clone the repo instead if you also want `docs/`, `CHANGELOG.md`, etc.:
+
 ```bash
 git clone https://github.com/pagea-dev/typo3quickstarter.git
 cd typo3quickstarter
 chmod +x typo3-ddev-setup.sh
 ```
-
-Or just grab the single file — it has no other dependencies beyond `bash`, `docker`, and `ddev`.
 
 ## Usage
 
