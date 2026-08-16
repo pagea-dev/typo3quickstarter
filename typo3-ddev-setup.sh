@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
+SCRIPT_VERSION="0.1.0"
+
 # --- Defaults ---------------------------------------------------------------
 T3_VERSION=""
 PROJECT_NAME=""
@@ -28,6 +31,7 @@ Options:
   --cleanup               Interactively pick previously created instances and remove them completely
                           (Docker containers/volumes, DDEV project listing, hosts entry, project directory)
   -h, --help              Show this help
+  --version               Show script version
 EOF
 }
 
@@ -41,6 +45,7 @@ for arg in "$@"; do
     --admin-email=*) ADMIN_EMAIL="${arg#*=}" ;;
     --cleanup) CLEANUP=1 ;;
     -h|--help) usage; exit 0 ;;
+    --version) echo "$SCRIPT_VERSION"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; usage; exit 1 ;;
   esac
 done

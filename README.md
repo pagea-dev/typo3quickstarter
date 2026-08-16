@@ -123,6 +123,10 @@ For every selected instance it runs `ddev delete -Oy` (removes containers, DB vo
 - `typo3-credentials.txt` is written outside the `public/` docroot, so it's never reachable over HTTP, and it gets `chmod 600` plus an entry in `.gitignore` automatically.
 - Only one major version is wired up per `--v` for now (see the table above) — extending the version map to a new TYPO3 release is a one-line addition in the script.
 
+## Versioning
+
+`./typo3-ddev-setup.sh --version` prints the current script version. It's bumped only as part of a GitHub release (not per commit) — see [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
