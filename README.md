@@ -13,6 +13,7 @@ Got an idea for a feature, or found a bug? [Open an issue](https://github.com/pa
 - **One command, zero clicking through the install wizard.** No more re-typing DB credentials or admin passwords by hand.
 - **Test against multiple TYPO3 versions in parallel.** Each instance gets its own name, its own DDEV project, its own URL.
 - **Disposable by design.** Spin one up, break it, tear it down. `--cleanup` gets rid of the mess for you.
+- **Kickstart a brand-new extension and have it under git from the first commit.** `--with-git` runs the official [TYPO3 extension kickstarter](https://github.com/FriendsOfTYPO3/kickstarter), then initializes a repository right where it just created your extension - a working TYPO3 instance, a scaffolded extension, and its own git history, from a single command. See [docs/with-git.md](docs/with-git.md).
 
 ## Prerequisites
 
@@ -103,6 +104,14 @@ An exact TYPO3 12 patch release, plus a specific version of an extension (`--req
 ```bash
 ./typo3-ddev-setup.sh --release=12.4.20 --require=georgringer/news:^11.0
 ```
+
+Kickstart a brand-new extension against the newest TYPO3, then put just that extension under git once it's created:
+
+```bash
+./typo3-ddev-setup.sh --with-git
+```
+
+Pick option 2 when asked, follow the kickstarter's prompts, and you'll have a working TYPO3 instance plus a freshly versioned extension - see [docs/with-git.md](docs/with-git.md).
 
 ## Documentation
 
