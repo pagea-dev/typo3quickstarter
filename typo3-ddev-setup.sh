@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
-SCRIPT_VERSION="0.4.0"
+SCRIPT_VERSION="0.5.0"
 
 # --- Colors -------------------------------------------------------------------
 # Whether stdout is a real terminal, captured now - before --verbose (parsed

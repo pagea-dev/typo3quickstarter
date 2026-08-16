@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-16
+
 ## [0.4.0] - 2026-08-16
 
 ### Added
