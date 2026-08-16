@@ -179,7 +179,17 @@ generate_password() {
     chars[$j]="$tmp"
   done
 
-  (IFS=''; echo "${chars[*]}")
+  printf '%s' "${chars[@]}"
+}
+
+# Locks a file down like typo3-credentials.txt: not group/world-readable, and
+# git-ignored if the project has a .gitignore. Used for anything that can end up
+# containing the credentials printed at the end of a run.
+secure_file() {
+  chmod 600 "$1"
+  if [[ -f .gitignore ]] && ! grep -qxF "$1" .gitignore; then
+    echo "$1" >> .gitignore
+  fi
 }
 
 # --- cleanup mode -------------------------------------------------------------
@@ -231,6 +241,95 @@ run_list() {
   done
 }
 
+confirm() {
+  local answer
+  read -rp "$1 [y/N] " answer
+  [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+abort() {
+  echo "Aborted, nothing deleted."
+  exit 0
+}
+
+# Runs the interactive multi-select checklist over the caller's ITEMS/NAMES
+# arrays and appends the chosen names to the caller's TO_DELETE array (same
+# dynamic-scoping convention as draw_menu/restore_tty below - all three expect
+# the caller's locals, not their own copies). Called directly rather than via
+# command/process substitution so 'q' can abort the whole script, not just a
+# subshell. Requires a real terminal.
+select_via_checklist() {
+  local total=${#ITEMS[@]}
+  local -a SELECTED=()
+  local i CURSOR=0
+  for i in "${!ITEMS[@]}"; do SELECTED[$i]=0; done
+
+  draw_menu() {
+    local j marker prefix
+    for j in "${!ITEMS[@]}"; do
+      marker=" "
+      [[ "${SELECTED[$j]}" == "1" ]] && marker="x"
+      prefix="  "
+      [[ $j -eq $CURSOR ]] && prefix="> "
+      printf "\033[K%s[%s] %s\n" "$prefix" "$marker" "${ITEMS[$j]}"
+    done
+  }
+
+  echo "Select instances to delete (Up/Down move, Space toggle, Enter confirm, q abort):"
+  draw_menu
+
+  local old_stty
+  old_stty="$(stty -g)"
+  restore_tty() { stty "$old_stty" 2>/dev/null || true; tput cnorm 2>/dev/null || true; }
+  trap restore_tty EXIT
+  stty -icanon -echo min 1 time 0
+  tput civis 2>/dev/null || true
+
+  local key rest
+  while true; do
+    IFS= read -rsn1 key
+    if [[ "$key" == $'\x1b' ]]; then
+      IFS= read -rsn2 -t 0.05 rest || true
+      key+="$rest"
+    fi
+    case "$key" in
+      $'\x1b[A')
+        ((CURSOR--)) || true
+        ((CURSOR < 0)) && CURSOR=$((total - 1))
+        ;;
+      $'\x1b[B')
+        ((CURSOR++)) || true
+        ((CURSOR >= total)) && CURSOR=0
+        ;;
+      ' ')
+        if [[ "${SELECTED[$CURSOR]}" == "1" ]]; then SELECTED[$CURSOR]=0; else SELECTED[$CURSOR]=1; fi
+        ;;
+      ""|$'\n'|$'\r')
+        break
+        ;;
+      q|Q)
+        restore_tty
+        trap - EXIT
+        abort
+        ;;
+    esac
+    printf "\033[%dA" "$total"
+    draw_menu
+  done
+
+  restore_tty
+  trap - EXIT
+
+  for i in "${!ITEMS[@]}"; do
+    [[ "${SELECTED[$i]}" == "1" ]] && TO_DELETE+=("${NAMES[$i]}")
+  done
+
+  # Without this, a run where nothing got selected ends on a failed [[ ]] (the
+  # last loop iteration), and under `set -e` a function call - unlike the same
+  # loop written inline - aborts the whole script on that non-zero return.
+  return 0
+}
+
 run_cleanup() {
   local scan_dir="${BASE_PATH%/}"
   [[ -d "$scan_dir" ]] || { echo "Error: '$scan_dir' does not exist." >&2; exit 1; }
@@ -252,88 +351,15 @@ run_cleanup() {
     exit 1
   fi
 
-  confirm() {
-    local answer
-    read -rp "$1 [y/N] " answer
-    [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
-  }
-
   local -a TO_DELETE=()
 
   # Only one candidate - no point showing a single-item checklist, just confirm it.
   if [[ ${#NAMES[@]} -eq 1 ]]; then
     echo "Found: ${ITEMS[0]}"
-    if ! confirm "Are you sure you want to remove it?"; then
-      echo "Aborted, nothing deleted."
-      exit 0
-    fi
+    confirm "Are you sure you want to remove it?" || abort
     TO_DELETE=("${NAMES[0]}")
   else
-    local total=${#ITEMS[@]}
-    local -a SELECTED=()
-    local i CURSOR=0
-    for i in "${!ITEMS[@]}"; do SELECTED[$i]=0; done
-
-    draw_menu() {
-      local j marker prefix
-      for j in "${!ITEMS[@]}"; do
-        marker=" "
-        [[ "${SELECTED[$j]}" == "1" ]] && marker="x"
-        prefix="  "
-        [[ $j -eq $CURSOR ]] && prefix="> "
-        printf "\033[K%s[%s] %s\n" "$prefix" "$marker" "${ITEMS[$j]}"
-      done
-    }
-
-    echo "Select instances to delete (Up/Down move, Space toggle, Enter confirm, q abort):"
-    draw_menu
-
-    local old_stty
-    old_stty="$(stty -g)"
-    restore_tty() { stty "$old_stty" 2>/dev/null || true; tput cnorm 2>/dev/null || true; }
-    trap restore_tty EXIT
-    stty -icanon -echo min 1 time 0
-    tput civis 2>/dev/null || true
-
-    local key rest
-    while true; do
-      IFS= read -rsn1 key
-      if [[ "$key" == $'\x1b' ]]; then
-        IFS= read -rsn2 -t 0.05 rest || true
-        key+="$rest"
-      fi
-      case "$key" in
-        $'\x1b[A')
-          ((CURSOR--)) || true
-          ((CURSOR < 0)) && CURSOR=$((total - 1))
-          ;;
-        $'\x1b[B')
-          ((CURSOR++)) || true
-          ((CURSOR >= total)) && CURSOR=0
-          ;;
-        ' ')
-          if [[ "${SELECTED[$CURSOR]}" == "1" ]]; then SELECTED[$CURSOR]=0; else SELECTED[$CURSOR]=1; fi
-          ;;
-        ""|$'\n'|$'\r')
-          break
-          ;;
-        q|Q)
-          restore_tty
-          trap - EXIT
-          echo "Aborted, nothing deleted."
-          exit 0
-          ;;
-      esac
-      printf "\033[%dA" "$total"
-      draw_menu
-    done
-
-    restore_tty
-    trap - EXIT
-
-    for i in "${!ITEMS[@]}"; do
-      [[ "${SELECTED[$i]}" == "1" ]] && TO_DELETE+=("${NAMES[$i]}")
-    done
+    select_via_checklist
 
     if [[ ${#TO_DELETE[@]} -eq 0 ]]; then
       echo "Nothing selected, nothing deleted."
@@ -342,10 +368,7 @@ run_cleanup() {
 
     echo "Are you sure you want to remove the following instances?"
     printf '  - %s\n' "${TO_DELETE[@]}"
-    if ! confirm "Proceed?"; then
-      echo "Aborted, nothing deleted."
-      exit 0
-    fi
+    confirm "Proceed?" || abort
   fi
 
   echo
@@ -599,19 +622,12 @@ Admin password: ${ADMIN_PASSWORD}
 Admin email:    ${ADMIN_EMAIL}
 CREDS
 
-chmod 600 "$CREDENTIALS_FILE"
-
-if [[ -f .gitignore ]] && ! grep -qxF "$CREDENTIALS_FILE" .gitignore; then
-  echo "$CREDENTIALS_FILE" >> .gitignore
-fi
+secure_file "$CREDENTIALS_FILE"
 
 if [[ "$VERBOSE" -eq 1 ]]; then
   # verbose.log can contain the passwords printed below, same sensitivity as
   # typo3-credentials.txt - lock it down the same way.
-  chmod 600 "$VERBOSE_LOG"
-  if [[ -f .gitignore ]] && ! grep -qxF "$VERBOSE_LOG" .gitignore; then
-    echo "$VERBOSE_LOG" >> .gitignore
-  fi
+  secure_file "$VERBOSE_LOG"
 fi
 
 echo
