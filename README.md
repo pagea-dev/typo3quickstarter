@@ -109,6 +109,7 @@ An exact TYPO3 12 patch release, plus a specific version of an extension (`--req
 - [docs/versions.md](docs/versions.md) — selecting a version, pinning an exact patch release, the `--no-security-blocking` security note, TYPO3 v11 quirks
 - [docs/backend-users.md](docs/backend-users.md) — the admin backend user
 - [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
+- [docs/development-settings.md](docs/development-settings.md) — the always-on extras every instance gets: Scheduler/Extensions core extensions, `TYPO3_CONTEXT=Development`, debug settings
 - [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
 - [docs/verbose-logging.md](docs/verbose-logging.md) — `--verbose`/`verbose.log`
 - [docs/information.md](docs/information.md) — the script's own `--version` and the release process

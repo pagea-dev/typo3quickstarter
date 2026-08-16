@@ -537,12 +537,16 @@ if [[ "$VERBOSE" -eq 1 ]]; then
 fi
 
 # --- DDEV setup --------------------------------------------------------------
+# TYPO3_CONTEXT=Development: these are disposable local instances, never anything
+# running under Production - Development context relaxes error output, disables
+# production-only caches, and is what the debug settings further down expect.
 ddev config \
   --project-type=typo3 \
   --project-name="$PROJECT_NAME" \
   --docroot=public \
   --create-docroot \
-  --php-version="$PHP_VERSION"
+  --php-version="$PHP_VERSION" \
+  --web-environment-add="TYPO3_CONTEXT=Development"
 
 # --- Mount extension paths into docker ------------------------------------------
 # EXTENSION_PATHS entries are already resolved to absolute paths and validated above.
@@ -573,11 +577,25 @@ ddev start
 ddev mysql -e "ALTER DATABASE db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 # --- TYPO3 installation via composer ------------------------------------------
+# Scaffold the base distribution's composer.json without installing yet, so the
+# extra core packages below (and the version pin, if any) land in the same single
+# install/lock-solve instead of a separate one after the fact.
+ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction --no-install
+
+# typo3/cms-extensionmanager already ships with the base distribution - required
+# again explicitly so it keeps working the same way even if that ever changes.
+# typo3/cms-scheduler doesn't ship by default and is added for the same reason:
+# a disposable test instance is a lot more useful with the Scheduler module and
+# a working Extensions module available out of the box.
+ddev composer require \
+  "typo3/cms-scheduler:${COMPOSER_CONSTRAINT}" \
+  "typo3/cms-extensionmanager:${COMPOSER_CONSTRAINT}" \
+  --no-interaction --no-install
+
 if [[ -z "$T3_PIN" ]]; then
-  ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
+  ddev composer install --no-interaction
 else
   echo "${C_CYAN}==> Pinning all TYPO3 core packages to exact version ${T3_PIN}${C_RESET}"
-  ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction --no-install
   # Literal (non-glob) replace: swap every "^X.Y" requirement for the pinned exact version.
   COMPOSER_JSON="$(cat composer.json)"
   COMPOSER_JSON="${COMPOSER_JSON//\"$COMPOSER_CONSTRAINT\"/\"$T3_PIN\"}"
@@ -691,6 +709,24 @@ if [[ -f "$SETTINGS_FILE" ]]; then
         'trustedHostsPattern' => '.*',"
   SETTINGS_PHP="${SETTINGS_PHP/$SEARCH/$REPLACE}"
   printf '%s\n' "$SETTINGS_PHP" > "$SETTINGS_FILE"
+fi
+
+# --- Debug settings ---------------------------------------------------------
+# Same reasoning as TYPO3_CONTEXT=Development above: this is a disposable local
+# instance, so trade production-safe defaults for maximum visibility into what's
+# actually happening. Rewrites via PHP (not a string search/replace like above)
+# since 'BE'/'FE' aren't guaranteed to already be top-level keys in settings.php.
+if [[ -f "$SETTINGS_FILE" ]]; then
+  ddev exec --raw php -r '
+      $file = $argv[1];
+      $config = require $file;
+      $config["BE"]["debug"] = true;
+      $config["FE"]["debug"] = true;
+      // Empty string disables TYPO3'"'"'s own exception handling entirely, so
+      // PHP'"'"'s raw error output/stack trace shows instead.
+      $config["SYS"]["debugExceptionHandler"] = "";
+      file_put_contents($file, "<?php\nreturn " . var_export($config, true) . ";\n");
+  ' "$SETTINGS_FILE"
 fi
 
 # --- Credentials file ---------------------------------------------------------

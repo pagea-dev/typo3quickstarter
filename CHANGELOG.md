@@ -13,6 +13,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 - A welcome banner (tool name, version, author, repo link) before every actual install run.
 - [docs/examples.md](docs/examples.md) - practical recipes for common scenarios (pinning a patch release, custom admin logins, extensions, cleanup, and more), linked from the README.
 - `--c all`/`--clear all`/`--cleanup all` removes every instance found under `--path` in one go - skips the checklist and asks once to confirm removing all of them.
+- Every instance now also gets `typo3/cms-scheduler` and `typo3/cms-extensionmanager`, runs under `TYPO3_CONTEXT=Development`, and has `BE/debug`, `FE/debug` on and `SYS/debugExceptionHandler` disabled - see [docs/development-settings.md](docs/development-settings.md).
 
 ### Fixed
 
