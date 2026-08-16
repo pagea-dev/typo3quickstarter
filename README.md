@@ -37,6 +37,12 @@ Or just grab the single file — it has no other dependencies beyond `bash`, `do
 ./typo3-ddev-setup.sh --v=13
 ```
 
+Want a specific minor or patch release instead of the newest one on that line? Pin it directly:
+
+```bash
+./typo3-ddev-setup.sh --v=12.4.20
+```
+
 No `--v`? It defaults to the newest supported major version:
 
 ```bash
@@ -69,7 +75,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 
 | Flag | Description | Default |
 |---|---|---|
-| `--v=N` | TYPO3 major version to install | highest supported |
+| `--v=N` | TYPO3 version to install — a major version (`12`) or a pinned minor/patch release (`12.4`, `12.4.20`) | highest supported |
 | `--name=NAME` | DDEV project name | auto-generated, e.g. `typo3-v13-a1b2` |
 | `--path=DIR` | Where the project folder is created (also used by `--cleanup`) | current directory |
 | `--admin-user=USER` | Backend admin username | `admin` |
@@ -86,6 +92,8 @@ Currently supported TYPO3 versions:
 | 12 | 8.2 | `^12.4` |
 | 13 | 8.3 | `^13.4` |
 | 14 | 8.4 | `^14.3` |
+
+> Project folder/DDEV names are always based on the major version (e.g. `typo3-v12-a1b2`), even if you pinned an exact patch release with `--v=12.4.20`.
 
 > **v11 note:** TYPO3 v11's native `typo3 setup` CLI command crashes on fresh installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). For `--v=11` the script automatically falls back to the legacy `typo3cms install:setup` installer instead, which doesn't have this bug.
 

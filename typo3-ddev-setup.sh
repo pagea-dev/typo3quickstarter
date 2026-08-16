@@ -16,8 +16,10 @@ Usage: typo3-ddev-setup.sh --v=<version> [options]
        typo3-ddev-setup.sh --cleanup [--path=DIR]
 
 Options:
-  --v=N                   TYPO3 major version to install (currently supported: 11, 12, 13, 14;
-                          defaults to the highest supported version if omitted)
+  --v=N                   TYPO3 version to install (currently supported major versions: 11, 12, 13, 14;
+                          defaults to the highest supported version if omitted).
+                          Pass just a major version (e.g. 12) to get the newest release on that
+                          line, or pin an exact minor/patch release (e.g. 12.4 or 12.4.20).
   --name=NAME             DDEV project name (default: auto-generated, e.g. typo3-v12-a1b2)
   --path=DIR              Directory the project folder is created in / scanned in for --cleanup (default: current dir)
   --admin-user=USER       Backend admin username (default: admin)
@@ -187,33 +189,36 @@ if [[ -z "$T3_VERSION" ]]; then
   echo "==> No --v given, defaulting to highest supported version: ${T3_VERSION}"
 fi
 
-case "$T3_VERSION" in
-  11)
-    PHP_VERSION="8.1"
-    COMPOSER_CONSTRAINT="^11.5"
-    ;;
-  12)
-    PHP_VERSION="8.2"
-    COMPOSER_CONSTRAINT="^12.4"
-    ;;
-  13)
-    PHP_VERSION="8.3"
-    COMPOSER_CONSTRAINT="^13.4"
-    ;;
-  14)
-    PHP_VERSION="8.4"
-    COMPOSER_CONSTRAINT="^14.3"
-    ;;
+# Accept a bare major version (12), or a pinned minor/patch release (12.4, 12.4.20).
+if [[ "$T3_VERSION" =~ ^([0-9]+)(\.[0-9]+){0,2}$ ]]; then
+  T3_MAJOR="${BASH_REMATCH[1]}"
+else
+  echo "Error: '--v' must be a version like 12, 12.4 or 12.4.20." >&2
+  exit 1
+fi
+
+case "$T3_MAJOR" in
+  11) PHP_VERSION="8.1"; DEFAULT_CONSTRAINT="^11.5" ;;
+  12) PHP_VERSION="8.2"; DEFAULT_CONSTRAINT="^12.4" ;;
+  13) PHP_VERSION="8.3"; DEFAULT_CONSTRAINT="^13.4" ;;
+  14) PHP_VERSION="8.4"; DEFAULT_CONSTRAINT="^14.3" ;;
   *)
     echo "Error: TYPO3 version '$T3_VERSION' is not supported yet (currently: ${SUPPORTED_VERSIONS[*]})." >&2
     exit 1
     ;;
 esac
 
+if [[ "$T3_VERSION" == "$T3_MAJOR" ]]; then
+  COMPOSER_CONSTRAINT="$DEFAULT_CONSTRAINT"
+else
+  # user pinned a specific minor/patch release, e.g. 12.4.20 -> install exactly that
+  COMPOSER_CONSTRAINT="$T3_VERSION"
+fi
+
 # --- Derived values --------------------------------------------------------
 if [[ -z "$PROJECT_NAME" ]]; then
   SUFFIX="$(printf '%04x' "$RANDOM")"
-  PROJECT_NAME="typo3-v${T3_VERSION}-${SUFFIX}"
+  PROJECT_NAME="typo3-v${T3_MAJOR}-${SUFFIX}"
 fi
 
 if [[ -z "$ADMIN_PASSWORD" ]]; then
@@ -249,7 +254,7 @@ ddev start
 ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------
-if [[ "$T3_VERSION" -eq 11 ]]; then
+if [[ "$T3_MAJOR" -eq 11 ]]; then
   # TYPO3 v11's native `typo3 setup` command crashes on fresh CLI installs
   # (GeneralUtility::$container is null when DataHandler touches the reference
   # index while creating the admin user - see https://forge.typo3.org/issues/105452).
