@@ -57,3 +57,21 @@ Proceed? [y/N]
 Only on `y`/`yes` does it actually run `ddev delete -Oy` for each one (removes containers, DB volumes, the DDEV project listing, and the hosts file entry) and only deletes the project folder itself once that succeeded — if `ddev delete` fails for some reason, the folder is left in place so nothing gets silently lost.
 
 `--cleanup` needs an interactive terminal (arrow keys / space / enter) — it won't run in a non-interactive shell or CI. Use `--list` there instead.
+
+## Targeting a specific instance
+
+Every "Done" summary prints a ready-to-use cleanup command for the instance you just created:
+
+```
+To clean up this instance: ./typo3-ddev-setup.sh --c 5aae
+```
+
+`--c`/`--clear`/`--cleanup` can take one or more name/ID substrings, space-separated (same multi-value syntax as `--require`/`--extension`). Only instances whose name contains at least one of them are considered:
+
+```bash
+./typo3-ddev-setup.sh --c 5aae
+```
+
+For an auto-generated name like `typo3-v12-5aae`, the 4-character suffix alone is enough and is what the hint prints — it's short and, in practice, unique. For a custom `--name=`, there's no separate suffix, so the hint prints the full name instead.
+
+If the filter narrows things down to exactly one instance, it skips straight to the single-instance confirmation (`Found: ... Are you sure you want to remove it?`); with more than one match it still shows the checklist, just restricted to those. No match prints `No instance matching <target> found in '<path>'.` instead of the usual empty-scan message.

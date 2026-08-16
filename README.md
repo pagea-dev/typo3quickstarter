@@ -66,6 +66,7 @@ Backend:     https://typo3-v13-a1b2.ddev.site/typo3
 Admin:       admin
 Password:    Ddev-482913605-Aa1
 Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
+To clean up this instance: ./typo3-ddev-setup.sh --c a1b2
 ```
 
 > The very first time DDEV adds a new `*.ddev.site` hostname to your system, it needs `sudo` to update `/etc/hosts` — you'll get a normal password prompt for that. It only happens once per hostname.
@@ -81,10 +82,24 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 | `--require=PKG` | Install extra Composer packages after setup — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--extension=PATH` | Mount and require a local extension for development — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--list` | List all instances this script created — see [docs/instances.md](docs/instances.md) | — |
-| `--cleanup`, `--clear`, `--c` | Interactively remove previously created instances — see [docs/instances.md](docs/instances.md) | — |
+| `--cleanup`, `--clear`, `--c` [TARGET...] | Interactively remove previously created instances, optionally narrowed down to name/ID matches — see [docs/instances.md](docs/instances.md) | — |
 | `-v`, `--verbose` | Also write the full console output to `verbose.log` — see [docs/verbose-logging.md](docs/verbose-logging.md) | — |
 | `-h`, `--help` | Show usage | — |
 | `--version` | Show the script's own version — see [docs/information.md](docs/information.md) | — |
+
+### More examples
+
+Latest TYPO3 14 with a couple of extensions and a personal admin login, in one command:
+
+```bash
+./typo3-ddev-setup.sh --release=14 --require=b13/container georgringer/news --admin-user=lukas --admin-password='Correct-Horse-1' --admin-email=lukas@example.com
+```
+
+An exact TYPO3 12 patch release, plus a specific version of an extension (`--require` takes any Composer constraint, same as `composer require vendor/package:constraint`):
+
+```bash
+./typo3-ddev-setup.sh --release=12.4.20 --require=georgringer/news:^11.0
+```
 
 ## Documentation
 

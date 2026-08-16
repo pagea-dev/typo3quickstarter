@@ -16,6 +16,7 @@ LIST=0
 VERBOSE=0
 COMPOSER_REQUIREMENTS=()
 EXTENSION_PATHS=()
+CLEANUP_TARGETS=()
 CURRENT_OPTION=""
 
 usage() {
@@ -42,7 +43,10 @@ Options:
                           development (see docs/composer-packages.md). Same multi-value syntax
                           as --require.
   --c, --clear, --cleanup Interactively pick previously created instances and remove them completely
-                          (Docker containers/volumes, DDEV project listing, hosts entry, project directory)
+                          (Docker containers/volumes, DDEV project listing, hosts entry, project directory).
+                          Optionally followed by one or more name/ID substrings to only consider
+                          matching instances, e.g. --c 0392 to target the instance whose auto-generated
+                          name ends in 0392 directly (skips the checklist if that's the only match).
   --list                  List all instances this script created (scans --path, non-interactive)
   -v, --verbose           Also write the full console output to verbose.log in the project
                           directory (chmod 600, like typo3-credentials.txt - it can contain
@@ -89,7 +93,7 @@ for arg in "$@"; do
       EXTENSION_PATHS+=("${arg#*=}")
       ;;
     --cleanup|--clear|--c)
-      CURRENT_OPTION=""
+      CURRENT_OPTION="cleanup_target"
       CLEANUP=1
       ;;
     --list)
@@ -120,6 +124,9 @@ for arg in "$@"; do
           ;;
         extension)
           EXTENSION_PATHS+=("$arg")
+          ;;
+        cleanup_target)
+          CLEANUP_TARGETS+=("$arg")
           ;;
         *)
           echo "Unexpected argument: $arg" >&2
@@ -200,6 +207,7 @@ get_typo3_version() {
   local v=""
   if [[ -f "$lock" ]]; then
     v="$(grep -A2 '"name": *"typo3/cms-core"' "$lock" | grep '"version"' | head -1 | sed -E 's/.*"version": *"([^"]+)".*/\1/')"
+    v="${v#v}" # composer.lock stores it as e.g. "v13.4.34" (git-tag style)
   fi
   echo "${v:-unknown}"
 }
@@ -341,8 +349,29 @@ run_cleanup() {
     ITEMS+=("TYPO3 V${version} | ${name}")
   done < <(find_instances "$scan_dir")
 
+  # If one or more targets were given (--c ID [ID...]), narrow down to instances
+  # whose name contains any of them - e.g. the 4-char suffix of an auto-generated
+  # name - instead of showing everything found under $scan_dir.
+  if [[ ${#CLEANUP_TARGETS[@]} -gt 0 ]]; then
+    local -a matched_names=() matched_items=()
+    local target matched i
+    for i in "${!NAMES[@]}"; do
+      matched=0
+      for target in "${CLEANUP_TARGETS[@]}"; do
+        [[ "${NAMES[$i]}" == *"$target"* ]] && matched=1 && break
+      done
+      [[ "$matched" -eq 1 ]] && matched_names+=("${NAMES[$i]}") && matched_items+=("${ITEMS[$i]}")
+    done
+    NAMES=("${matched_names[@]}")
+    ITEMS=("${matched_items[@]}")
+  fi
+
   if [[ ${#NAMES[@]} -eq 0 ]]; then
-    echo "No typo3-ddev-setup instances found in '${scan_dir}'."
+    if [[ ${#CLEANUP_TARGETS[@]} -gt 0 ]]; then
+      echo "No instance matching ${CLEANUP_TARGETS[*]} found in '${scan_dir}'."
+    else
+      echo "No typo3-ddev-setup instances found in '${scan_dir}'."
+    fi
     exit 0
   fi
 
@@ -640,5 +669,6 @@ echo "Credentials: ${PROJECT_DIR}/${CREDENTIALS_FILE}"
 if [[ "$VERBOSE" -eq 1 ]]; then
   echo "Verbose log: ${PROJECT_DIR}/${VERBOSE_LOG}"
 fi
+echo "To clean up this instance: ./typo3-ddev-setup.sh --c ${SUFFIX:-$PROJECT_NAME}"
 
 ddev launch /typo3 >/dev/null 2>&1 || echo "Note: could not auto-open the browser, open the backend URL above manually."
