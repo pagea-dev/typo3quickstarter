@@ -84,7 +84,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 | `--list` | List all instances this script created — see [docs/instances.md](docs/instances.md) | — |
 | `--cleanup` | Interactively remove previously created instances — see [docs/instances.md](docs/instances.md) | — |
 | `-h`, `--help` | Show usage | — |
-| `--version` | Show the script's own version — see [docs/versioning.md](docs/versioning.md) | — |
+| `--version` | Show the script's own version — see [docs/information.md](docs/information.md) | — |
 
 ## Documentation
 
@@ -92,7 +92,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 - [docs/backend-users.md](docs/backend-users.md) — the primary admin user and additional backend users via `--beuser`
 - [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
 - [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
-- [docs/versioning.md](docs/versioning.md) — the script's own `--version` and the release process
+- [docs/information.md](docs/information.md) — the script's own `--version` and the release process
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — guidelines for PRs
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each version
 

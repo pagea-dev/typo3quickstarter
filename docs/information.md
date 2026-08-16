@@ -1,4 +1,4 @@
-# Script versioning
+# Script version info
 
 ```bash
 ./typo3-ddev-setup.sh --version
