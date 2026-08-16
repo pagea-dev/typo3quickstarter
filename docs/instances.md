@@ -75,3 +75,20 @@ To clean up this instance: ./typo3-ddev-setup.sh --c 5aae
 For an auto-generated name like `typo3-v12-5aae`, the 4-character suffix alone is enough and is what the hint prints — it's short and, in practice, unique. For a custom `--name=`, there's no separate suffix, so the hint prints the full name instead.
 
 If the filter narrows things down to exactly one instance, it skips straight to the single-instance confirmation (`Found: ... Are you sure you want to remove it?`); with more than one match it still shows the checklist, just restricted to those. No match prints `No instance matching <target> found in '<path>'.` instead of the usual empty-scan message.
+
+## Removing everything: `--c all`
+
+```bash
+./typo3-ddev-setup.sh --c all
+```
+
+`all` is a special target, not a name/ID substring - used on its own it means every instance found under `--path`. Skips the checklist entirely and goes straight to one confirmation listing all of them:
+
+```
+Are you sure you want to remove ALL of the following instances?
+  - TYPO3 V12.4.45 | typo3-v12-5aae
+  - TYPO3 V13.4.1  | typo3-v13-6235
+Proceed? [y/N]
+```
+
+Same `y`/`yes`-only deletion behavior as above - nothing is touched until you confirm, and each instance is only removed from disk once `ddev delete` succeeds for it. Only works when `all` is the sole target; `--c all 5aae` is treated as two literal substrings instead (neither of which is likely to match anything named `all`), not as a shortcut for "everything".

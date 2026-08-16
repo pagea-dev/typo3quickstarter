@@ -12,6 +12,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 - Colored output based on message status: progress steps in cyan, errors in red, warnings in yellow, the final success summary in green. Auto-disables when stdout isn't a terminal (piping, `--list` in scripts/CI) or `--verbose` is set (keeps `verbose.log` free of escape codes), and can be forced off with `NO_COLOR=1`.
 - A welcome banner (tool name, version, author, repo link) before every actual install run.
 - [docs/examples.md](docs/examples.md) - practical recipes for common scenarios (pinning a patch release, custom admin logins, extensions, cleanup, and more), linked from the README.
+- `--c all`/`--clear all`/`--cleanup all` removes every instance found under `--path` in one go - skips the checklist and asks once to confirm removing all of them.
 
 ### Fixed
 

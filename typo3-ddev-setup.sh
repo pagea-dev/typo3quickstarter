@@ -54,6 +54,8 @@ Options:
                           Optionally followed by one or more name/ID substrings to only consider
                           matching instances, e.g. --c 0392 to target the instance whose auto-generated
                           name ends in 0392 directly (skips the checklist if that's the only match).
+                          --c all targets every instance found under --path: skips the checklist
+                          and asks once to confirm removing all of them.
   --list                  List all instances this script created (scans --path, non-interactive)
   -v, --verbose           Also write the full console output to verbose.log in the project
                           directory (chmod 600, like typo3-credentials.txt - it can contain
@@ -370,10 +372,16 @@ run_cleanup() {
     ITEMS+=("TYPO3 V${version} | ${name}")
   done < <(find_instances "$scan_dir")
 
-  # If one or more targets were given (--c ID [ID...]), narrow down to instances
-  # whose name contains any of them - e.g. the 4-char suffix of an auto-generated
-  # name - instead of showing everything found under $scan_dir.
-  if [[ ${#CLEANUP_TARGETS[@]} -gt 0 ]]; then
+  # "all" (used alone) means every instance found under $scan_dir - skips the
+  # substring filter below entirely, so it can't accidentally be narrowed by an
+  # instance that happens to have "all" in its name.
+  local ALL_TARGET=0
+  if [[ ${#CLEANUP_TARGETS[@]} -eq 1 ]] && [[ "${CLEANUP_TARGETS[0]}" == "all" ]]; then
+    ALL_TARGET=1
+  # Otherwise, if one or more targets were given (--c ID [ID...]), narrow down to
+  # instances whose name contains any of them - e.g. the 4-char suffix of an
+  # auto-generated name - instead of showing everything found under $scan_dir.
+  elif [[ ${#CLEANUP_TARGETS[@]} -gt 0 ]]; then
     local -a matched_names=() matched_items=()
     local target matched i
     for i in "${!NAMES[@]}"; do
@@ -403,8 +411,15 @@ run_cleanup() {
 
   local -a TO_DELETE=()
 
+  # "all" skips the checklist entirely and goes straight to one confirmation
+  # listing every instance that would be removed.
+  if [[ "$ALL_TARGET" -eq 1 ]]; then
+    TO_DELETE=("${NAMES[@]}")
+    echo "${C_YELLOW}Are you sure you want to remove ALL of the following instances?${C_RESET}"
+    printf '  - %s\n' "${ITEMS[@]}"
+    confirm "${C_YELLOW}Proceed?${C_RESET}" || abort
   # Only one candidate - no point showing a single-item checklist, just confirm it.
-  if [[ ${#NAMES[@]} -eq 1 ]]; then
+  elif [[ ${#NAMES[@]} -eq 1 ]]; then
     echo "Found: ${ITEMS[0]}"
     confirm "${C_YELLOW}Are you sure you want to remove it?${C_RESET}" || abort
     TO_DELETE=("${NAMES[0]}")
