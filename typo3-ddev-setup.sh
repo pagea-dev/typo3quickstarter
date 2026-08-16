@@ -246,7 +246,7 @@ ddev config \
 ddev start
 
 # --- TYPO3 installation via composer ------------------------------------------
-ddev composer create "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
+ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------
 if [[ "$T3_VERSION" -eq 11 ]]; then
@@ -319,4 +319,4 @@ echo "Admin:       ${ADMIN_USER}"
 echo "Password:    ${ADMIN_PASSWORD}"
 echo "Credentials: ${PROJECT_DIR}/${CREDENTIALS_FILE}"
 
-ddev launch /typo3 || echo "Note: could not auto-open the browser, open the backend URL above manually."
+ddev launch /typo3 >/dev/null 2>&1 || echo "Note: could not auto-open the browser, open the backend URL above manually."
