@@ -15,14 +15,16 @@ CLEANUP=0
 
 usage() {
   cat <<'EOF'
-Usage: typo3-ddev-setup.sh --v=<version> [options]
+Usage: typo3-ddev-setup.sh --release=<version> [options]
        typo3-ddev-setup.sh --cleanup [--path=DIR]
 
 Options:
-  --v=N                   TYPO3 version to install (currently supported major versions: 11, 12, 13, 14;
+  -r=N, --release=N      TYPO3 version to install (currently supported major versions: 11, 12, 13, 14;
                           defaults to the highest supported version if omitted).
                           Pass just a major version (e.g. 12) to get the newest release on that
-                          line, or pin an exact minor/patch release (e.g. 12.4 or 12.4.20).
+                          line, or pin an exact minor/patch release (e.g. 12.4 or 12.4.20). Pinning
+                          an older patch release installs it even if Composer flags it as insecure -
+                          see the README section on --no-security-blocking.
   --name=NAME             DDEV project name (default: auto-generated, e.g. typo3-v12-a1b2)
   --path=DIR              Directory the project folder is created in / scanned in for --cleanup (default: current dir)
   --admin-user=USER       Backend admin username (default: admin)
@@ -37,7 +39,7 @@ EOF
 
 for arg in "$@"; do
   case "$arg" in
-    --v=*) T3_VERSION="${arg#*=}" ;;
+    --release=*|-r=*) T3_VERSION="${arg#*=}" ;;
     --name=*) PROJECT_NAME="${arg#*=}" ;;
     --path=*) BASE_PATH="${arg#*=}" ;;
     --admin-user=*) ADMIN_USER="${arg#*=}" ;;
@@ -191,14 +193,14 @@ SUPPORTED_VERSIONS=(11 12 13 14)
 
 if [[ -z "$T3_VERSION" ]]; then
   T3_VERSION="${SUPPORTED_VERSIONS[${#SUPPORTED_VERSIONS[@]}-1]}"
-  echo "==> No --v given, defaulting to highest supported version: ${T3_VERSION}"
+  echo "==> No --release given, defaulting to highest supported version: ${T3_VERSION}"
 fi
 
 # Accept a bare major version (12), or a pinned minor/patch release (12.4, 12.4.20).
 if [[ "$T3_VERSION" =~ ^([0-9]+)(\.[0-9]+){0,2}$ ]]; then
   T3_MAJOR="${BASH_REMATCH[1]}"
 else
-  echo "Error: '--v' must be a version like 12, 12.4 or 12.4.20." >&2
+  echo "Error: '--release' must be a version like 12, 12.4 or 12.4.20." >&2
   exit 1
 fi
 
@@ -269,6 +271,8 @@ else
   printf '%s\n' "$COMPOSER_JSON" > composer.json
   # Composer refuses by default to install versions flagged by security advisories,
   # which an intentionally pinned old patch release commonly is - that's expected here.
+  echo "==> Installing with --no-security-blocking: an older pinned release may be flagged"
+  echo "    by Composer's security-advisory check, and that block is bypassed on purpose here."
   ddev composer install --no-interaction --no-security-blocking
 fi
 

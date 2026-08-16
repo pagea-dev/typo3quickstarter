@@ -34,16 +34,16 @@ Or just grab the single file — it has no other dependencies beyond `bash`, `do
 ### Spin up an instance
 
 ```bash
-./typo3-ddev-setup.sh --v=13
+./typo3-ddev-setup.sh --release=13
 ```
 
 Want a specific minor or patch release instead of the newest one on that line? Pin it directly:
 
 ```bash
-./typo3-ddev-setup.sh --v=12.4.20
+./typo3-ddev-setup.sh --release=12.4.20
 ```
 
-No `--v`? It defaults to the newest supported major version:
+No `--release`? It defaults to the newest supported major version:
 
 ```bash
 ./typo3-ddev-setup.sh
@@ -75,7 +75,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 
 | Flag | Description | Default |
 |---|---|---|
-| `--v=N` | TYPO3 version to install — a major version (`12`) or a pinned minor/patch release (`12.4`, `12.4.20`) | highest supported |
+| `-r=N`, `--release=N` | TYPO3 version to install — a major version (`12`) or a pinned minor/patch release (`12.4`, `12.4.20`) | highest supported |
 | `--name=NAME` | DDEV project name | auto-generated, e.g. `typo3-v13-a1b2` |
 | `--path=DIR` | Where the project folder is created (also used by `--cleanup`) | current directory |
 | `--admin-user=USER` | Backend admin username | `admin` |
@@ -83,21 +83,24 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 | `--admin-email=MAIL` | Backend admin email | `admin@<project>.ddev.site` |
 | `--cleanup` | Interactively remove previously created instances | — |
 | `-h`, `--help` | Show usage | — |
+| `--version` | Show the script's own version (see [Versioning](#versioning)) | — |
 
 Currently supported TYPO3 versions:
 
-| `--v` | PHP | Composer constraint |
+| `--release` | PHP | Composer constraint |
 |---|---|---|
 | 11 | 8.1 | `^11.5` |
 | 12 | 8.2 | `^12.4` |
 | 13 | 8.3 | `^13.4` |
 | 14 | 8.4 | `^14.3` |
 
-> Project folder/DDEV names are always based on the major version (e.g. `typo3-v12-a1b2`), even if you pinned an exact patch release with `--v=12.4.20`.
+> Project folder/DDEV names are always based on the major version (e.g. `typo3-v12-a1b2`), even if you pinned an exact patch release with `--release=12.4.20`.
 
-> **Pinning a patch release:** `typo3/cms-base-distribution` (the meta-package the script installs) only has a couple of releases of its own — it just bundles the real `typo3/cms-*` packages via the constraints above. So pinning e.g. `--v=12.4.20` can't be done by requesting that version of the distribution package directly; the script installs via the normal constraint first and then re-pins every `typo3/cms-*` package to the exact version. Older patch releases are often flagged by Composer's security-advisory check — since pinning one is a deliberate choice here, the script installs it anyway with `--no-security-blocking`.
+> **Pinning a patch release:** `typo3/cms-base-distribution` (the meta-package the script installs) only has a couple of releases of its own — it just bundles the real `typo3/cms-*` packages via the constraints above. So pinning e.g. `--release=12.4.20` can't be done by requesting that version of the distribution package directly; the script installs via the normal constraint first and then re-pins every `typo3/cms-*` package to the exact version.
 
-> **v11 note:** TYPO3 v11's native `typo3 setup` CLI command crashes on fresh installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). For `--v=11` the script automatically falls back to the legacy `typo3cms install:setup` installer instead, which doesn't have this bug.
+> ⚠️ **Security note:** pinning an older patch release installs it with Composer's `--no-security-blocking` flag. Composer normally refuses to install package versions flagged by a known security advisory — since requesting an old release here is a deliberate choice (e.g. to reproduce a bug), that block is bypassed on purpose. The script prints a warning when this happens. If you just want the latest, patched version, omit the patch level (`--release=12` or `--release=12.4`) and this doesn't apply.
+
+> **v11 note:** TYPO3 v11's native `typo3 setup` CLI command crashes on fresh installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). For `--release=11` the script automatically falls back to the legacy `typo3cms install:setup` installer instead, which doesn't have this bug.
 
 ### Cleaning up
 
@@ -123,7 +126,7 @@ For every selected instance it runs `ddev delete -Oy` (removes containers, DB vo
 ## Notes
 
 - `typo3-credentials.txt` is written outside the `public/` docroot, so it's never reachable over HTTP, and it gets `chmod 600` plus an entry in `.gitignore` automatically.
-- Only one major version is wired up per `--v` for now (see the table above) — extending the version map to a new TYPO3 release is a one-line addition in the script.
+- Only one major version is wired up per `--release` for now (see the table above) — extending the version map to a new TYPO3 release is a one-line addition in the script.
 
 ## Versioning
 
