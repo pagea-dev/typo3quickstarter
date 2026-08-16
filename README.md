@@ -31,13 +31,11 @@ Or just grab the single file — it has no other dependencies beyond `bash`, `do
 
 ## Usage
 
-### Spin up an instance
-
 ```bash
-./typo3-ddev-setup.sh --v=13
+./typo3-ddev-setup.sh --release=13
 ```
 
-No `--v`? It defaults to the newest supported major version:
+No `--release`? It defaults to the newest supported major version:
 
 ```bash
 ./typo3-ddev-setup.sh
@@ -69,51 +67,30 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 
 | Flag | Description | Default |
 |---|---|---|
-| `--v=N` | TYPO3 major version to install | highest supported |
+| `-r=N`, `--release=N` | TYPO3 version to install — see [docs/versions.md](docs/versions.md) | highest supported |
 | `--name=NAME` | DDEV project name | auto-generated, e.g. `typo3-v13-a1b2` |
 | `--path=DIR` | Where the project folder is created (also used by `--cleanup`) | current directory |
-| `--admin-user=USER` | Backend admin username | `admin` |
-| `--admin-password=PASS` | Backend admin password | randomly generated |
-| `--admin-email=MAIL` | Backend admin email | `admin@<project>.ddev.site` |
-| `--cleanup` | Interactively remove previously created instances | — |
+| `--admin-user`, `--admin-password`, `--admin-email` | Primary admin backend user — see [docs/backend-users.md](docs/backend-users.md) | `admin` / random / `admin@<project>.ddev.site` |
+| `--beuser`, `--bepass`, `--bemail` | Create an additional admin backend user — see [docs/backend-users.md](docs/backend-users.md) | — |
+| `--require=PKG` | Install extra Composer packages after setup — see [docs/composer-packages.md](docs/composer-packages.md) | — |
+| `--extension=PATH` | Mount and require a local extension for development — see [docs/composer-packages.md](docs/composer-packages.md) | — |
+| `--list` | List all instances this script created — see [docs/instances.md](docs/instances.md) | — |
+| `--cleanup` | Interactively remove previously created instances — see [docs/instances.md](docs/instances.md) | — |
 | `-h`, `--help` | Show usage | — |
+| `--version` | Show the script's own version — see [docs/versioning.md](docs/versioning.md) | — |
 
-Currently supported TYPO3 versions:
+## Documentation
 
-| `--v` | PHP | Composer constraint |
-|---|---|---|
-| 11 | 8.1 | `^11.5` |
-| 12 | 8.2 | `^12.4` |
-| 13 | 8.3 | `^13.4` |
-| 14 | 8.4 | `^14.3` |
-
-> **v11 note:** TYPO3 v11's native `typo3 setup` CLI command crashes on fresh installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). For `--v=11` the script automatically falls back to the legacy `typo3cms install:setup` installer instead, which doesn't have this bug.
-
-### Cleaning up
-
-```bash
-./typo3-ddev-setup.sh --cleanup
-```
-
-Scans the current directory for instances the script created and shows an interactive checklist:
-
-```
-Select instances to delete (Up/Down move, Space toggle, Enter confirm, q abort):
-> [ ] TYPO3 V12.4.45 | typo3-v12-5aae
-  [x] TYPO3 V13.4.1  | typo3-v13-6235
-```
-
-- `↑` / `↓` — move
-- `Space` — toggle selection
-- `Enter` — delete everything selected
-- `q` — abort, nothing is touched
-
-For every selected instance it runs `ddev delete -Oy` (removes containers, DB volumes, the DDEV project listing, and the hosts file entry) and only deletes the project folder itself once that succeeded — if `ddev delete` fails for some reason, the folder is left in place so nothing gets silently lost.
+- [docs/versions.md](docs/versions.md) — selecting a version, pinning an exact patch release, the `--no-security-blocking` security note, TYPO3 v11 quirks
+- [docs/backend-users.md](docs/backend-users.md) — the primary admin user and additional backend users via `--beuser`
+- [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
+- [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
+- [docs/versioning.md](docs/versioning.md) — the script's own `--version` and the release process
+- [CHANGELOG.md](CHANGELOG.md) — what changed in each version
 
 ## Notes
 
 - `typo3-credentials.txt` is written outside the `public/` docroot, so it's never reachable over HTTP, and it gets `chmod 600` plus an entry in `.gitignore` automatically.
-- Only one major version is wired up per `--v` for now (see the table above) — extending the version map to a new TYPO3 release is a one-line addition in the script.
 
 ## License
 
