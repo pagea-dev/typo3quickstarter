@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 
 ## [Unreleased]
 
+### Added
+
+- Colored output based on message status: progress steps in cyan, errors in red, warnings in yellow, the final success summary in green. Auto-disables when stdout isn't a terminal (piping, `--list` in scripts/CI) or `--verbose` is set (keeps `verbose.log` free of escape codes), and can be forced off with `NO_COLOR=1`.
+
+### Fixed
+
+- Composer-required extensions (`--require`/`--extension`) never got their database tables created or caches cleared, since nothing ran `extension:setup` after `composer require`. Now runs automatically after the TYPO3 install step, before the backend opens.
+- The backend's Database Analyzer permanently showed pending "CHANGE COLUMN" diffs for every table: DDEV creates its database with an explicit `utf8mb4` charset and no collation, which defaults to `utf8mb4_general_ci`, while TYPO3 configures all its tables for `utf8mb4_unicode_ci` - and no CLI command can apply that class of schema change after the fact. Now sets the database's default collation to match right after `ddev start`, before any tables exist.
+
 ## [0.3.0] - 2026-08-16
 
 ### Added

@@ -4,6 +4,13 @@ set -euo pipefail
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
 SCRIPT_VERSION="0.3.0"
 
+# --- Colors -------------------------------------------------------------------
+# Whether stdout is a real terminal, captured now - before --verbose (parsed
+# below) later wraps it in a `tee` pipe, which would always fail this check.
+# The actual C_* variables are set further down, once --verbose is known.
+IS_TTY=0
+[[ -t 1 ]] && IS_TTY=1
+
 # --- Defaults ---------------------------------------------------------------
 T3_VERSION=""
 PROJECT_NAME=""
@@ -113,7 +120,7 @@ for arg in "$@"; do
       exit 0
       ;;
     --*)
-      echo "Unknown option: $arg" >&2
+      echo "${C_RED}Unknown option: $arg${C_RESET}" >&2
       usage
       exit 1
       ;;
@@ -129,7 +136,7 @@ for arg in "$@"; do
           CLEANUP_TARGETS+=("$arg")
           ;;
         *)
-          echo "Unexpected argument: $arg" >&2
+          echo "${C_RED}Unexpected argument: $arg${C_RESET}" >&2
           usage
           exit 1
           ;;
@@ -138,24 +145,38 @@ for arg in "$@"; do
   esac
 done
 
+# Colors stay off entirely under --verbose, so escape codes never end up in
+# verbose.log - the `tee` pipe it wraps stdout in would force every later
+# `-t 1` check to fail anyway, silently losing color from the live terminal too.
+if [[ "$IS_TTY" -eq 1 ]] && [[ "$VERBOSE" -eq 0 ]] && [[ -z "${NO_COLOR:-}" ]]; then
+  C_RESET=$'\033[0m'
+  C_BOLD=$'\033[1m'
+  C_CYAN=$'\033[36m'
+  C_GREEN=$'\033[32m'
+  C_YELLOW=$'\033[33m'
+  C_RED=$'\033[31m'
+else
+  C_RESET="" C_BOLD="" C_CYAN="" C_GREEN="" C_YELLOW="" C_RED=""
+fi
+
 # --- check if extension paths exist ------------------------------------------
 for i in "${!EXTENSION_PATHS[@]}"; do
   EXTENSION_PATHS[$i]="$(realpath "${EXTENSION_PATHS[$i]}")"
 
   if [[ ! -d "${EXTENSION_PATHS[$i]}" ]]; then
-    echo "Extension path does not exist: ${EXTENSION_PATHS[$i]}" >&2
+    echo "${C_RED}Extension path does not exist: ${EXTENSION_PATHS[$i]}${C_RESET}" >&2
     exit 1
   fi
 
   if [[ ! -f "${EXTENSION_PATHS[$i]}/composer.json" ]]; then
-    echo "Extension does not contain a composer.json: ${EXTENSION_PATHS[$i]}" >&2
+    echo "${C_RED}Extension does not contain a composer.json: ${EXTENSION_PATHS[$i]}${C_RESET}" >&2
     exit 1
   fi
 done
 
-command -v docker >/dev/null 2>&1 || { echo "Error: docker is not installed or not in PATH." >&2; exit 1; }
-command -v ddev >/dev/null 2>&1 || { echo "Error: ddev is not installed or not in PATH." >&2; exit 1; }
-docker info >/dev/null 2>&1 || { echo "Error: docker daemon is not running." >&2; exit 1; }
+command -v docker >/dev/null 2>&1 || { echo "${C_RED}Error: docker is not installed or not in PATH.${C_RESET}" >&2; exit 1; }
+command -v ddev >/dev/null 2>&1 || { echo "${C_RED}Error: ddev is not installed or not in PATH.${C_RESET}" >&2; exit 1; }
+docker info >/dev/null 2>&1 || { echo "${C_RED}Error: docker daemon is not running.${C_RESET}" >&2; exit 1; }
 
 PASSWORD_CHARS_UPPER='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 PASSWORD_CHARS_LOWER='abcdefghijklmnopqrstuvwxyz'
@@ -229,7 +250,7 @@ find_instances() {
 
 run_list() {
   local scan_dir="${BASE_PATH%/}"
-  [[ -d "$scan_dir" ]] || { echo "Error: '$scan_dir' does not exist." >&2; exit 1; }
+  [[ -d "$scan_dir" ]] || { echo "${C_RED}Error: '$scan_dir' does not exist.${C_RESET}" >&2; exit 1; }
 
   local -a NAMES=() VERSIONS=()
   local name version
@@ -239,7 +260,7 @@ run_list() {
   done < <(find_instances "$scan_dir")
 
   if [[ ${#NAMES[@]} -eq 0 ]]; then
-    echo "No typo3-ddev-setup instances found in '${scan_dir}'."
+    echo "${C_YELLOW}No typo3-ddev-setup instances found in '${scan_dir}'.${C_RESET}"
     exit 0
   fi
 
@@ -256,7 +277,7 @@ confirm() {
 }
 
 abort() {
-  echo "Aborted, nothing deleted."
+  echo "${C_YELLOW}Aborted, nothing deleted.${C_RESET}"
   exit 0
 }
 
@@ -283,7 +304,7 @@ select_via_checklist() {
     done
   }
 
-  echo "Select instances to delete (Up/Down move, Space toggle, Enter confirm, q abort):"
+  echo "${C_CYAN}Select instances to delete (Up/Down move, Space toggle, Enter confirm, q abort):${C_RESET}"
   draw_menu
 
   local old_stty
@@ -340,7 +361,7 @@ select_via_checklist() {
 
 run_cleanup() {
   local scan_dir="${BASE_PATH%/}"
-  [[ -d "$scan_dir" ]] || { echo "Error: '$scan_dir' does not exist." >&2; exit 1; }
+  [[ -d "$scan_dir" ]] || { echo "${C_RED}Error: '$scan_dir' does not exist.${C_RESET}" >&2; exit 1; }
 
   local -a NAMES=() ITEMS=()
   local name version
@@ -368,15 +389,15 @@ run_cleanup() {
 
   if [[ ${#NAMES[@]} -eq 0 ]]; then
     if [[ ${#CLEANUP_TARGETS[@]} -gt 0 ]]; then
-      echo "No instance matching ${CLEANUP_TARGETS[*]} found in '${scan_dir}'."
+      echo "${C_YELLOW}No instance matching ${CLEANUP_TARGETS[*]} found in '${scan_dir}'.${C_RESET}"
     else
-      echo "No typo3-ddev-setup instances found in '${scan_dir}'."
+      echo "${C_YELLOW}No typo3-ddev-setup instances found in '${scan_dir}'.${C_RESET}"
     fi
     exit 0
   fi
 
   if [[ ! -t 0 ]]; then
-    echo "Error: --cleanup needs an interactive terminal (arrow keys / space / enter)." >&2
+    echo "${C_RED}Error: --cleanup needs an interactive terminal (arrow keys / space / enter).${C_RESET}" >&2
     exit 1
   fi
 
@@ -385,34 +406,34 @@ run_cleanup() {
   # Only one candidate - no point showing a single-item checklist, just confirm it.
   if [[ ${#NAMES[@]} -eq 1 ]]; then
     echo "Found: ${ITEMS[0]}"
-    confirm "Are you sure you want to remove it?" || abort
+    confirm "${C_YELLOW}Are you sure you want to remove it?${C_RESET}" || abort
     TO_DELETE=("${NAMES[0]}")
   else
     select_via_checklist
 
     if [[ ${#TO_DELETE[@]} -eq 0 ]]; then
-      echo "Nothing selected, nothing deleted."
+      echo "${C_YELLOW}Nothing selected, nothing deleted.${C_RESET}"
       exit 0
     fi
 
-    echo "Are you sure you want to remove the following instances?"
+    echo "${C_YELLOW}Are you sure you want to remove the following instances?${C_RESET}"
     printf '  - %s\n' "${TO_DELETE[@]}"
-    confirm "Proceed?" || abort
+    confirm "${C_YELLOW}Proceed?${C_RESET}" || abort
   fi
 
   echo
   local proj
   for proj in "${TO_DELETE[@]}"; do
-    echo "==> Removing DDEV project (containers, volumes, DB, hosts entry): ${proj}"
+    echo "${C_CYAN}==> Removing DDEV project (containers, volumes, DB, hosts entry): ${proj}${C_RESET}"
     if ddev delete -Oy "$proj"; then
-      echo "==> Removing project directory: ${scan_dir}/${proj}"
+      echo "${C_CYAN}==> Removing project directory: ${scan_dir}/${proj}${C_RESET}"
       rm -rf "${scan_dir:?}/${proj:?}"
     else
-      echo "Warning: 'ddev delete' failed for ${proj} - directory left in place, check manually." >&2
+      echo "${C_YELLOW}Warning: 'ddev delete' failed for ${proj} - directory left in place, check manually.${C_RESET}" >&2
     fi
   done
 
-  echo "Cleanup done."
+  echo "${C_GREEN}Cleanup done.${C_RESET}"
 }
 
 if [[ "$LIST" -eq 1 ]]; then
@@ -431,14 +452,14 @@ SUPPORTED_VERSIONS=(11 12 13 14)
 
 if [[ -z "$T3_VERSION" ]]; then
   T3_VERSION="${SUPPORTED_VERSIONS[${#SUPPORTED_VERSIONS[@]}-1]}"
-  echo "==> No --release given, defaulting to highest supported version: ${T3_VERSION}"
+  echo "${C_CYAN}==> No --release given, defaulting to highest supported version: ${T3_VERSION}${C_RESET}"
 fi
 
 # Accept a bare major version (12), or a pinned minor/patch release (12.4, 12.4.20).
 if [[ "$T3_VERSION" =~ ^([0-9]+)(\.[0-9]+){0,2}$ ]]; then
   T3_MAJOR="${BASH_REMATCH[1]}"
 else
-  echo "Error: '--release' must be a version like 12, 12.4 or 12.4.20." >&2
+  echo "${C_RED}Error: '--release' must be a version like 12, 12.4 or 12.4.20.${C_RESET}" >&2
   exit 1
 fi
 
@@ -448,7 +469,7 @@ case "$T3_MAJOR" in
   13) PHP_VERSION="8.3"; COMPOSER_CONSTRAINT="^13.4" ;;
   14) PHP_VERSION="8.4"; COMPOSER_CONSTRAINT="^14.3" ;;
   *)
-    echo "Error: TYPO3 version '$T3_VERSION' is not supported yet (currently: ${SUPPORTED_VERSIONS[*]})." >&2
+    echo "${C_RED}Error: TYPO3 version '$T3_VERSION' is not supported yet (currently: ${SUPPORTED_VERSIONS[*]}).${C_RESET}" >&2
     exit 1
     ;;
 esac
@@ -479,11 +500,11 @@ fi
 PROJECT_DIR="${BASE_PATH%/}/${PROJECT_NAME}"
 
 if [[ -e "$PROJECT_DIR" ]]; then
-  echo "Error: directory '$PROJECT_DIR' already exists." >&2
+  echo "${C_RED}Error: directory '$PROJECT_DIR' already exists.${C_RESET}" >&2
   exit 1
 fi
 
-echo "==> Creating TYPO3 ${T3_VERSION} project '${PROJECT_NAME}' in ${PROJECT_DIR}"
+echo "${C_CYAN}==> Creating TYPO3 ${T3_VERSION} project '${PROJECT_NAME}' in ${PROJECT_DIR}${C_RESET}"
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 
@@ -493,7 +514,7 @@ if [[ "$VERBOSE" -eq 1 ]]; then
   # level up for now and move it in once composer is done - see below.
   VERBOSE_LOG_TMP="$(mktemp ../.verbose-log.XXXXXX)"
   exec > >(tee -a "$VERBOSE_LOG_TMP") 2>&1
-  echo "==> Verbose logging enabled - full output also written to ${PROJECT_DIR}/verbose.log"
+  echo "${C_CYAN}==> Verbose logging enabled - full output also written to ${PROJECT_DIR}/verbose.log${C_RESET}"
 fi
 
 # --- DDEV setup --------------------------------------------------------------
@@ -520,11 +541,23 @@ fi
 
 ddev start
 
+# --- Database collation -------------------------------------------------------
+# DDEV's db-container init creates the database with an explicit "CHARACTER SET
+# utf8mb4" and no COLLATE, which picks MariaDB/MySQL's built-in default for that
+# charset (utf8mb4_general_ci) - setting collation-server in a custom my.cnf has
+# no effect here, since that only applies when a CREATE DATABASE/TABLE statement
+# omits the charset too. TYPO3 configures utf8mb4_unicode_ci for all its tables,
+# so every column not explicitly set otherwise permanently shows up as a pending
+# "CHANGE COLUMN" diff in the backend's Database Analyzer - which no CLI command
+# can apply (extension:setup only adds, never changes). Match the collation new
+# tables inherit by default before any get created.
+ddev mysql -e "ALTER DATABASE db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
 # --- TYPO3 installation via composer ------------------------------------------
 if [[ -z "$T3_PIN" ]]; then
   ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction
 else
-  echo "==> Pinning all TYPO3 core packages to exact version ${T3_PIN}"
+  echo "${C_CYAN}==> Pinning all TYPO3 core packages to exact version ${T3_PIN}${C_RESET}"
   ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}" --no-interaction --no-install
   # Literal (non-glob) replace: swap every "^X.Y" requirement for the pinned exact version.
   COMPOSER_JSON="$(cat composer.json)"
@@ -532,8 +565,8 @@ else
   printf '%s\n' "$COMPOSER_JSON" > composer.json
   # Composer refuses by default to install versions flagged by security advisories,
   # which an intentionally pinned old patch release commonly is - that's expected here.
-  echo "==> Installing with --no-security-blocking: an older pinned release may be flagged"
-  echo "    by Composer's security-advisory check, and that block is bypassed on purpose here."
+  echo "${C_CYAN}==> Installing with --no-security-blocking: an older pinned release may be flagged"
+  echo "    by Composer's security-advisory check, and that block is bypassed on purpose here.${C_RESET}"
   ddev composer install --no-interaction --no-security-blocking
 fi
 
@@ -558,7 +591,7 @@ for i in "${!EXTENSION_PATHS[@]}"; do
     )"
 
     if [[ -z "$package_name" ]]; then
-        echo "Could not determine Composer package name for ${EXTENSION_PATHS[$i]}" >&2
+        echo "${C_RED}Could not determine Composer package name for ${EXTENSION_PATHS[$i]}${C_RESET}" >&2
         exit 1
     fi
 
@@ -568,7 +601,7 @@ done
 
 # --- Additional composer packages ------------------------------------------
 if [[ ${#COMPOSER_REQUIREMENTS[@]} -gt 0 ]]; then
-  echo "==> Installing additional Composer requirements:"
+  echo "${C_CYAN}==> Installing additional Composer requirements:${C_RESET}"
   printf '    - %s\n' "${COMPOSER_REQUIREMENTS[@]}"
 
   ddev composer require \
@@ -619,6 +652,11 @@ else
     --force
 fi
 
+# --- Extension setup (database schema update + cache flush) -------------------
+# Required after composer-requiring extensions above: their DB tables don't exist yet
+# and TYPO3 won't pick up ext_localconf/ext_tables changes until caches are cleared.
+ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
+
 # --- Trusted hosts pattern -------------------------------------------------------
 # TYPO3's default trustedHostsPattern ('SERVER_NAME') requires SERVER_PORT to match
 # the port implied by the HTTPS flag. DDEV's router terminates TLS and proxies to the
@@ -660,14 +698,14 @@ if [[ "$VERBOSE" -eq 1 ]]; then
 fi
 
 echo
-echo "==> Done."
-echo "URL:         https://${PROJECT_NAME}.ddev.site"
-echo "Backend:     https://${PROJECT_NAME}.ddev.site/typo3"
-echo "Admin:       ${ADMIN_USER}"
-echo "Password:    ${ADMIN_PASSWORD}"
-echo "Credentials: ${PROJECT_DIR}/${CREDENTIALS_FILE}"
+echo "${C_GREEN}${C_BOLD}==> Done.${C_RESET}"
+echo "${C_BOLD}URL:${C_RESET}         https://${PROJECT_NAME}.ddev.site"
+echo "${C_BOLD}Backend:${C_RESET}     https://${PROJECT_NAME}.ddev.site/typo3"
+echo "${C_BOLD}Admin:${C_RESET}       ${ADMIN_USER}"
+echo "${C_BOLD}Password:${C_RESET}    ${ADMIN_PASSWORD}"
+echo "${C_BOLD}Credentials:${C_RESET} ${PROJECT_DIR}/${CREDENTIALS_FILE}"
 if [[ "$VERBOSE" -eq 1 ]]; then
-  echo "Verbose log: ${PROJECT_DIR}/${VERBOSE_LOG}"
+  echo "${C_BOLD}Verbose log:${C_RESET} ${PROJECT_DIR}/${VERBOSE_LOG}"
 fi
 echo "To clean up this instance: ./typo3-ddev-setup.sh --c ${SUFFIX:-$PROJECT_NAME}"
 
