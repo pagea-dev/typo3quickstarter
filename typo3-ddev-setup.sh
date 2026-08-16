@@ -40,12 +40,17 @@ Options:
                           (not supported for --release=11, see docs/backend-users.md)
   --bepass=PASS           Password for --beuser (default: randomly generated)
   --bemail=MAIL           Email for --beuser (default: <beuser>@<project>.ddev.site)
+  --require=PKG           Install an extra Composer package after setup. Repeat the flag or
+                          list several packages after one occurrence, space-separated.
+  --extension=PATH        Mount a local extension directory and require it at :@dev for
+                          development (see docs/composer-packages.md). Same multi-value syntax
+                          as --require.
   --cleanup               Interactively pick previously created instances and remove them completely
                           (Docker containers/volumes, DDEV project listing, hosts entry, project directory)
   -h, --help              Show this help
   --version               Show script version
 
-See docs/ for detailed documentation on versions, backend users, and cleanup.
+See docs/ for detailed documentation on versions, backend users, Composer packages/extensions, and cleanup.
 EOF
 }
 

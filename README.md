@@ -72,6 +72,8 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 | `--path=DIR` | Where the project folder is created (also used by `--cleanup`) | current directory |
 | `--admin-user`, `--admin-password`, `--admin-email` | Primary admin backend user — see [docs/backend-users.md](docs/backend-users.md) | `admin` / random / `admin@<project>.ddev.site` |
 | `--beuser`, `--bepass`, `--bemail` | Create an additional admin backend user — see [docs/backend-users.md](docs/backend-users.md) | — |
+| `--require=PKG` | Install extra Composer packages after setup — see [docs/composer-packages.md](docs/composer-packages.md) | — |
+| `--extension=PATH` | Mount and require a local extension for development — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--cleanup` | Interactively remove previously created instances — see [docs/cleanup.md](docs/cleanup.md) | — |
 | `-h`, `--help` | Show usage | — |
 | `--version` | Show the script's own version — see [docs/versioning.md](docs/versioning.md) | — |
@@ -80,6 +82,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 
 - [docs/versions.md](docs/versions.md) — selecting a version, pinning an exact patch release, the `--no-security-blocking` security note, TYPO3 v11 quirks
 - [docs/backend-users.md](docs/backend-users.md) — the primary admin user and additional backend users via `--beuser`
+- [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
 - [docs/cleanup.md](docs/cleanup.md) — `--cleanup` walkthrough
 - [docs/versioning.md](docs/versioning.md) — the script's own `--version` and the release process
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each version
