@@ -93,7 +93,12 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 - [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
 - [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
 - [docs/versioning.md](docs/versioning.md) — the script's own `--version` and the release process
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — guidelines for PRs
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each version
+
+## Contributing
+
+Sending a PR? Please read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) first - in short: branch from an up-to-date `main`, test the script for real before opening the PR, and keep the executable bit intact.
 
 ## Notes
 
