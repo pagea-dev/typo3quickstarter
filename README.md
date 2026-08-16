@@ -83,6 +83,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 | `--extension=PATH` | Mount and require a local extension for development — see [docs/composer-packages.md](docs/composer-packages.md) | — |
 | `--list` | List all instances this script created — see [docs/instances.md](docs/instances.md) | — |
 | `--cleanup` | Interactively remove previously created instances — see [docs/instances.md](docs/instances.md) | — |
+| `-v`, `--verbose` | Also write the full console output to `verbose.log` — see [docs/verbose-logging.md](docs/verbose-logging.md) | — |
 | `-h`, `--help` | Show usage | — |
 | `--version` | Show the script's own version — see [docs/information.md](docs/information.md) | — |
 
@@ -92,6 +93,7 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 - [docs/backend-users.md](docs/backend-users.md) — the primary admin user and additional backend users via `--beuser`
 - [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require` and local extension development via `--extension`
 - [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
+- [docs/verbose-logging.md](docs/verbose-logging.md) — `--verbose`/`verbose.log`
 - [docs/information.md](docs/information.md) — the script's own `--version` and the release process
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — guidelines for PRs
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each version
@@ -100,9 +102,15 @@ Credentials: /home/you/projects/typo3-v13-a1b2/typo3-credentials.txt
 
 Sending a PR? Please read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) first - in short: branch from an up-to-date `main`, test the script for real before opening the PR, and keep the executable bit intact.
 
+## Compatibility
+
+Actively tested on Ubuntu-based Linux (e.g. Zorin OS) and Windows via WSL. Should work anywhere `bash`, `docker`, and `ddev` do, but hasn't been verified elsewhere.
+
+macOS isn't tested or supported yet - happy to take a PR from someone who wants to develop and test it there (see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)).
+
 ## Notes
 
-- `typo3-credentials.txt` is written outside the `public/` docroot, so it's never reachable over HTTP, and it gets `chmod 600` plus an entry in `.gitignore` automatically.
+- `typo3-credentials.txt` is written outside the `public/` docroot, so it's never reachable over HTTP, and it gets `chmod 600` plus an entry in `.gitignore` automatically. `verbose.log` (with `--verbose`) gets the same treatment.
 
 ## License
 

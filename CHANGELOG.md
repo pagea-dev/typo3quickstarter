@@ -8,6 +8,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 ### Added
 
 - `docs/CONTRIBUTING.md` with PR guidelines (branch from an up-to-date `main`, test the script for real, keep the executable bit, update docs/CHANGELOG for user-facing changes), linked from README.md.
+- `-v`/`--verbose` writes the full console output to `verbose.log` in the project directory (`chmod 600` + `.gitignore`, same as `typo3-credentials.txt` - it can contain the same passwords). Starts logging once the project directory exists, and moves the log in from a temp location once Composer is done with it, since `ddev composer create-project` requires an empty target directory. See [docs/verbose-logging.md](docs/verbose-logging.md).
+- Compatibility section in README.md: tested on Ubuntu-based Linux and WSL; macOS not yet supported.
+
+### Fixed
+
+- `generate_password` now guarantees at least one uppercase, lowercase, digit, and special character instead of drawing all 20 characters uniformly at random - the latter had roughly a 1-in-5 chance of producing a password with no special character, which TYPO3's default password policy rejects outright, failing the whole setup.
 
 ## [0.2.0] - 2026-08-16
 

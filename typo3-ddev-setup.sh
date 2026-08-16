@@ -16,6 +16,7 @@ BE_PASSWORD=""
 BE_EMAIL=""
 CLEANUP=0
 LIST=0
+VERBOSE=0
 COMPOSER_REQUIREMENTS=()
 EXTENSION_PATHS=()
 CURRENT_OPTION=""
@@ -50,6 +51,9 @@ Options:
   --cleanup               Interactively pick previously created instances and remove them completely
                           (Docker containers/volumes, DDEV project listing, hosts entry, project directory)
   --list                  List all instances this script created (scans --path, non-interactive)
+  -v, --verbose           Also write the full console output to verbose.log in the project
+                          directory (chmod 600, like typo3-credentials.txt - it can contain
+                          the admin/backend-user passwords printed at the end of a run)
   -h, --help              Show this help
   --version               Show script version
 
@@ -111,6 +115,10 @@ for arg in "$@"; do
       CURRENT_OPTION=""
       LIST=1
       ;;
+    -v|--verbose)
+      CURRENT_OPTION=""
+      VERBOSE=1
+      ;;
     -h|--help)
       usage
       exit 0
@@ -161,13 +169,36 @@ command -v docker >/dev/null 2>&1 || { echo "Error: docker is not installed or n
 command -v ddev >/dev/null 2>&1 || { echo "Error: ddev is not installed or not in PATH." >&2; exit 1; }
 docker info >/dev/null 2>&1 || { echo "Error: docker daemon is not running." >&2; exit 1; }
 
-PASSWORD_CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#*%-_'
+PASSWORD_CHARS_UPPER='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+PASSWORD_CHARS_LOWER='abcdefghijklmnopqrstuvwxyz'
+PASSWORD_CHARS_DIGIT='0123456789'
+PASSWORD_CHARS_SPECIAL='#*%-_'
+PASSWORD_CHARS="${PASSWORD_CHARS_UPPER}${PASSWORD_CHARS_LOWER}${PASSWORD_CHARS_DIGIT}${PASSWORD_CHARS_SPECIAL}"
 generate_password() {
-  local length=20 password="" i
-  for ((i = 0; i < length; i++)); do
-    password+="${PASSWORD_CHARS:RANDOM % ${#PASSWORD_CHARS}:1}"
+  local length=20
+  local -a chars=()
+  local i j tmp
+
+  # TYPO3's default password policy requires at least one upper/lower/digit/special
+  # character. A uniform draw over the full charset can miss a class by chance
+  # (~20% odds of no special char in 20 draws) and TYPO3 then rejects it outright,
+  # so guarantee one of each first and fill/shuffle the rest.
+  chars+=("${PASSWORD_CHARS_UPPER:RANDOM % ${#PASSWORD_CHARS_UPPER}:1}")
+  chars+=("${PASSWORD_CHARS_LOWER:RANDOM % ${#PASSWORD_CHARS_LOWER}:1}")
+  chars+=("${PASSWORD_CHARS_DIGIT:RANDOM % ${#PASSWORD_CHARS_DIGIT}:1}")
+  chars+=("${PASSWORD_CHARS_SPECIAL:RANDOM % ${#PASSWORD_CHARS_SPECIAL}:1}")
+  for ((i = ${#chars[@]}; i < length; i++)); do
+    chars+=("${PASSWORD_CHARS:RANDOM % ${#PASSWORD_CHARS}:1}")
   done
-  echo "$password"
+
+  for ((i = length - 1; i > 0; i--)); do
+    j=$((RANDOM % (i + 1)))
+    tmp="${chars[$i]}"
+    chars[$i]="${chars[$j]}"
+    chars[$j]="$tmp"
+  done
+
+  (IFS=''; echo "${chars[*]}")
 }
 
 # --- cleanup mode -------------------------------------------------------------
@@ -415,6 +446,15 @@ echo "==> Creating TYPO3 ${T3_VERSION} project '${PROJECT_NAME}' in ${PROJECT_DI
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 
+if [[ "$VERBOSE" -eq 1 ]]; then
+  # 'ddev composer create-project' refuses to run unless the project directory is
+  # empty (bar a small whitelist), so the log can't live in there yet. Write it one
+  # level up for now and move it in once composer is done - see below.
+  VERBOSE_LOG_TMP="$(mktemp ../.verbose-log.XXXXXX)"
+  exec > >(tee -a "$VERBOSE_LOG_TMP") 2>&1
+  echo "==> Verbose logging enabled - full output also written to ${PROJECT_DIR}/verbose.log"
+fi
+
 # --- DDEV setup --------------------------------------------------------------
 ddev config \
   --project-type=typo3 \
@@ -454,6 +494,11 @@ else
   echo "==> Installing with --no-security-blocking: an older pinned release may be flagged"
   echo "    by Composer's security-advisory check, and that block is bypassed on purpose here."
   ddev composer install --no-interaction --no-security-blocking
+fi
+
+if [[ "$VERBOSE" -eq 1 ]]; then
+  VERBOSE_LOG="verbose.log"
+  mv "$VERBOSE_LOG_TMP" "$VERBOSE_LOG"
 fi
 
 # --- Add mounted extension paths to composer.json packages ------------------------------------------
@@ -592,6 +637,15 @@ if [[ -f .gitignore ]] && ! grep -qxF "$CREDENTIALS_FILE" .gitignore; then
   echo "$CREDENTIALS_FILE" >> .gitignore
 fi
 
+if [[ "$VERBOSE" -eq 1 ]]; then
+  # verbose.log can contain the passwords printed below, same sensitivity as
+  # typo3-credentials.txt - lock it down the same way.
+  chmod 600 "$VERBOSE_LOG"
+  if [[ -f .gitignore ]] && ! grep -qxF "$VERBOSE_LOG" .gitignore; then
+    echo "$VERBOSE_LOG" >> .gitignore
+  fi
+fi
+
 echo
 echo "==> Done."
 echo "URL:         https://${PROJECT_NAME}.ddev.site"
@@ -602,5 +656,8 @@ if [[ -n "$BE_USER" ]]; then
   echo "Extra user:  ${BE_USER} / ${BE_PASSWORD}"
 fi
 echo "Credentials: ${PROJECT_DIR}/${CREDENTIALS_FILE}"
+if [[ "$VERBOSE" -eq 1 ]]; then
+  echo "Verbose log: ${PROJECT_DIR}/${VERBOSE_LOG}"
+fi
 
 ddev launch /typo3 >/dev/null 2>&1 || echo "Note: could not auto-open the browser, open the backend URL above manually."
