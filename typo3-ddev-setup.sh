@@ -533,6 +533,23 @@ else
     --force
 fi
 
+# --- Trusted hosts pattern -------------------------------------------------------
+# TYPO3's default trustedHostsPattern ('SERVER_NAME') requires SERVER_PORT to match
+# the port implied by the HTTPS flag. DDEV's router terminates TLS and proxies to the
+# web container over plain HTTP, so PHP sees HTTPS=on but SERVER_PORT=80 - a mismatch
+# that makes every request 500 with "does not match the configured trusted hosts
+# pattern". Allow all hosts instead; this is a disposable local instance, not exposed
+# to the internet.
+SETTINGS_FILE="config/system/settings.php"
+if [[ -f "$SETTINGS_FILE" ]]; then
+  SETTINGS_PHP="$(cat "$SETTINGS_FILE")"
+  SEARCH="'SYS' => ["
+  REPLACE="'SYS' => [
+        'trustedHostsPattern' => '.*',"
+  SETTINGS_PHP="${SETTINGS_PHP/$SEARCH/$REPLACE}"
+  printf '%s\n' "$SETTINGS_PHP" > "$SETTINGS_FILE"
+fi
+
 # --- Additional backend user (optional) ----------------------------------------
 if [[ -n "$BE_USER" ]]; then
   echo "==> Creating additional admin backend user '${BE_USER}'"

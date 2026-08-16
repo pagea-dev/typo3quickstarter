@@ -25,6 +25,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 
 - Restored the script's executable bit (accidentally committed as non-executable by an external contribution).
 - Removed duplicate extension-path validation and leftover dead debug code from the `--extension` implementation.
+- Every instance now gets `trustedHostsPattern` set to `.*` in `config/system/settings.php` right after setup. Without it, requests could fail with a 500 "does not match the configured trusted hosts pattern" error, because DDEV's router terminates TLS and proxies to the web container over plain HTTP, so PHP sees `HTTPS=on` but `SERVER_PORT=80` - a mismatch TYPO3's default `'SERVER_NAME'` pattern rejects. DDEV normally papers over this by auto-generating its own override, but only during a plain `composer create-project` - the pinned-version install path (`--release=X.Y.Z`) bypasses that, so it was hit every time.
 
 ## [0.1.0] - 2026-08-16
 
