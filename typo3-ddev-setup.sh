@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
-SCRIPT_VERSION="0.1.0"
+SCRIPT_VERSION="0.2.0"
 
 # --- Defaults ---------------------------------------------------------------
 T3_VERSION=""
@@ -153,6 +153,15 @@ done
 command -v docker >/dev/null 2>&1 || { echo "Error: docker is not installed or not in PATH." >&2; exit 1; }
 command -v ddev >/dev/null 2>&1 || { echo "Error: ddev is not installed or not in PATH." >&2; exit 1; }
 docker info >/dev/null 2>&1 || { echo "Error: docker daemon is not running." >&2; exit 1; }
+
+PASSWORD_CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#*%-_'
+generate_password() {
+  local length=20 password="" i
+  for ((i = 0; i < length; i++)); do
+    password+="${PASSWORD_CHARS:RANDOM % ${#PASSWORD_CHARS}:1}"
+  done
+  echo "$password"
+}
 
 # --- cleanup mode -------------------------------------------------------------
 # Reads the exact TYPO3 core version out of composer.lock so the list shows
@@ -338,7 +347,7 @@ if [[ -z "$PROJECT_NAME" ]]; then
 fi
 
 if [[ -z "$ADMIN_PASSWORD" ]]; then
-  ADMIN_PASSWORD="Ddev-$(( RANDOM * 32768 + RANDOM ))-Aa1"
+  ADMIN_PASSWORD="$(generate_password)"
 fi
 
 if [[ -z "$ADMIN_EMAIL" ]]; then
@@ -347,7 +356,7 @@ fi
 
 if [[ -n "$BE_USER" ]]; then
   if [[ -z "$BE_PASSWORD" ]]; then
-    BE_PASSWORD="Ddev-$(( RANDOM * 32768 + RANDOM ))-Aa1"
+    BE_PASSWORD="$(generate_password)"
   fi
   if [[ -z "$BE_EMAIL" ]]; then
     BE_EMAIL="${BE_USER}@${PROJECT_NAME}.ddev.site"
