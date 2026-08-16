@@ -369,6 +369,7 @@ ddev config \
   --php-version="$PHP_VERSION"
 
 # --- Mount extension paths into docker ------------------------------------------
+# EXTENSION_PATHS entries are already resolved to absolute paths and validated above.
 if [[ ${#EXTENSION_PATHS[@]} -gt 0 ]]; then
     {
         echo "services:"
@@ -376,19 +377,7 @@ if [[ ${#EXTENSION_PATHS[@]} -gt 0 ]]; then
         echo "    volumes:"
 
         for i in "${!EXTENSION_PATHS[@]}"; do
-            extension_path="$(realpath "${EXTENSION_PATHS[$i]}")"
-
-            if [[ ! -d "$extension_path" ]]; then
-                echo "Extension path does not exist: $extension_path" >&2
-                exit 1
-            fi
-
-            if [[ ! -f "$extension_path/composer.json" ]]; then
-                echo "Extension does not contain a composer.json: $extension_path" >&2
-                exit 1
-            fi
-
-            echo "      - ${extension_path}:/mnt/extension-${i}"
+            echo "      - ${EXTENSION_PATHS[$i]}:/mnt/extension-${i}"
         done
     } > .ddev/docker-compose.extensions.yaml
 fi
@@ -413,13 +402,6 @@ else
 fi
 
 # --- Add mounted extension paths to composer.json packages ------------------------------------------
-#debug: check mounted paths
-#for i in "${!EXTENSION_PATHS[@]}"; do
-#    echo "==> Mounting extension: ${EXTENSION_PATHS[$i]}"
-#    echo "      ${EXTENSION_PATHS[$i]}:/mnt/extension-${i}"
-#    echo "      - ${EXTENSION_PATHS[$i]}:/mnt/extension-${i}"
-#done
-
 for i in "${!EXTENSION_PATHS[@]}"; do
     mount_path="/mnt/extension-${i}"
 
