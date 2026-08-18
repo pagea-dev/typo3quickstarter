@@ -1,8 +1,8 @@
 # Managing your instances
 
-`--list` and `--cleanup` both scan a directory (current directory, or `--path=DIR`) for instances this script created. They recognize an instance by the marker files it writes — `.ddev/config.yaml` plus either `.typo3-ddev-setup-marker` or `typo3-credentials.txt` in the project folder — not by the folder name. So instances started with a custom `--name=` are found just as reliably as auto-generated ones.
+`--list` and `--cleanup` both scan a directory (current directory, or `--path=DIR`) for instances this script created. They recognize an instance by the marker files it writes — `.ddev/config.yaml` plus either `.ddev/.typo3-ddev-setup-marker` or `typo3-credentials.txt` in the project folder — not by the folder name. So instances started with a custom `--name=` are found just as reliably as auto-generated ones.
 
-`.typo3-ddev-setup-marker` is written right after `ddev config`, before anything that could still fail (Composer, the TYPO3 setup itself, ...) - `typo3-credentials.txt` alone only proves a run finished successfully, so without it a run that died partway would leave a DDEV project neither command could find or remove.
+`.ddev/.typo3-ddev-setup-marker` is written right after `ddev config`, before anything that could still fail (Composer, the TYPO3 setup itself, ...) - `typo3-credentials.txt` alone only proves a run finished successfully, so without it a run that died partway would leave a DDEV project neither command could find or remove. It sits inside `.ddev/` because `ddev composer create-project` only runs on a project directory that is empty apart from a small whitelist, and `.ddev/` is one of the few directories it ignores. Instances created with 0.4.0, which wrote the marker to the project root, are still recognized.
 
 The TYPO3 version shown is read straight out of each instance's `composer.lock` (the exact `typo3/cms-core` version), not just the major version encoded in the folder name.
 
