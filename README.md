@@ -17,13 +17,6 @@ Got an idea for a feature, or found a bug? [Open an issue](https://github.com/pa
 
 ![typo3quickstarter demo](demo.gif)
 
-## Why
-
-- **One command, zero clicking through the install wizard.** No more re-typing DB credentials or admin passwords by hand.
-- **Test against multiple TYPO3 versions in parallel.** Each instance gets its own name, its own DDEV project, its own URL.
-- **Disposable by design.** Spin one up, break it, tear it down. `--cleanup` gets rid of the mess for you.
-- **Kickstart a brand-new extension and have it under git from the first commit.** `--with-git` runs the official [TYPO3 extension kickstarter](https://github.com/FriendsOfTYPO3/kickstarter), then initializes a repository right where it just created your extension - a working TYPO3 instance, a scaffolded extension, and its own git history, from a single command. See [docs/with-git.md](docs/with-git.md).
-
 ## Prerequisites
 
 - [Docker](https://www.docker.com/)
@@ -35,14 +28,14 @@ The script checks for both and bails out early with a clear error if either is m
 
 Grab the latest release — it's a single file with no other dependencies beyond `bash`, `docker`, and `ddev`:
 
-```bash
+```shell
 curl -LO https://github.com/pagea-dev/typo3quickstarter/releases/latest/download/typo3-ddev-setup.sh
 chmod +x typo3-ddev-setup.sh
 ```
 
 Or clone the repo instead if you also want `docs/`, `CHANGELOG.md`, etc.:
 
-```bash
+```shell
 git clone https://github.com/pagea-dev/typo3quickstarter.git
 cd typo3quickstarter
 chmod +x typo3-ddev-setup.sh
@@ -50,13 +43,13 @@ chmod +x typo3-ddev-setup.sh
 
 ## Usage
 
-```bash
+```shell
 ./typo3-ddev-setup.sh --release=13
 ```
 
 No `--release`? It defaults to the newest supported major version:
 
-```bash
+```shell
 ./typo3-ddev-setup.sh
 ```
 
@@ -104,23 +97,30 @@ To clean up this instance: ./typo3-ddev-setup.sh --c a1b2
 
 Latest TYPO3 14 with a couple of extensions and a personal admin login, in one command:
 
-```bash
+```shell
 ./typo3-ddev-setup.sh --release=14 --require=b13/container georgringer/news --admin-user=lukas --admin-password='Correct-Horse-1' --admin-email=lukas@example.com
 ```
 
 An exact TYPO3 12 patch release, plus a specific version of an extension (`--require` takes any Composer constraint, same as `composer require vendor/package:constraint`):
 
-```bash
+```shell
 ./typo3-ddev-setup.sh --release=12.4.20 --require=georgringer/news:^11.0
 ```
 
 Kickstart a brand-new extension against the newest TYPO3, then put just that extension under git once it's created:
 
-```bash
+```shell
 ./typo3-ddev-setup.sh --with-git
 ```
 
 Pick option 2 when asked, follow the kickstarter's prompts, and you'll have a working TYPO3 instance plus a freshly versioned extension - see [docs/with-git.md](docs/with-git.md).
+
+## Why
+
+- **One command, zero clicking through the install wizard.** No more re-typing DB credentials or admin passwords by hand.
+- **Test against multiple TYPO3 versions in parallel.** Each instance gets its own name, its own DDEV project, its own URL.
+- **Disposable by design.** Spin one up, break it, tear it down. `--cleanup` gets rid of the mess for you.
+- **Kickstart a brand-new extension and have it under git from the first commit.** `--with-git` runs the official [TYPO3 extension kickstarter](https://github.com/FriendsOfTYPO3/kickstarter), then initializes a repository right where it just created your extension - a working TYPO3 instance, a scaffolded extension, and its own git history, from a single command. See [docs/with-git.md](docs/with-git.md).
 
 ## Documentation
 
