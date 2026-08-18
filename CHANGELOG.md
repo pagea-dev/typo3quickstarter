@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 
 ## [Unreleased]
 
+### Fixed
+
+- Every install run aborted at `ddev composer create-project` with "`.typo3-ddev-setup-marker` is not allowed to be present": `ddev composer create-project` refuses to run unless the project directory is empty apart from a small whitelist, and 0.4.0 wrote that marker file to the project root beforehand. The marker now lives in `.ddev/.typo3-ddev-setup-marker` - a directory `ddev` skips over during that check - so it is still written before anything that can fail, and `--list`/`--cleanup` keep finding partway-failed runs. Instances created with 0.4.1 are still recognized at the old path ([#8](https://github.com/pagea-dev/typo3quickstarter/issues/8)).
+
 ## [0.4.0] - 2026-08-16
 
 ### Added

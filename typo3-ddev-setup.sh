@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
-SCRIPT_VERSION="0.4.0"
+SCRIPT_VERSION="0.4.1"
 
 # --- Colors -------------------------------------------------------------------
 # Whether stdout is a real terminal, captured now - before --verbose (parsed
@@ -250,11 +250,13 @@ get_typo3_version() {
 
 # Prints one "name<TAB>version" line per instance found under $1. Recognizes an
 # instance by the markers this script always creates - not by folder name - so
-# instances started with --name=custom are found too. .typo3-ddev-setup-marker
-# is written right after "ddev config", before anything that could still fail,
+# instances started with --name=custom are found too. The setup marker is
+# written right after "ddev config", before anything that could still fail,
 # so a run that dies partway (Composer, TYPO3 setup, ...) is still found here
 # instead of leaving an orphaned DDEV project outside the tool's reach -
-# typo3-credentials.txt alone only proves the run finished successfully.
+# typo3-credentials.txt alone only proves the run finished successfully. The
+# project-root marker path is still accepted for instances created with 0.4.0,
+# which wrote it there before it moved into .ddev/.
 find_instances() {
   local scan_dir="$1"
   local dir name
@@ -262,7 +264,7 @@ find_instances() {
     [[ -d "$dir" ]] || continue
     name="$(basename "$dir")"
     [[ -f "$dir/.ddev/config.yaml" ]] || continue
-    [[ -f "$dir/.typo3-ddev-setup-marker" || -f "$dir/typo3-credentials.txt" ]] || continue
+    [[ -f "$dir/.ddev/.typo3-ddev-setup-marker" || -f "$dir/.typo3-ddev-setup-marker" || -f "$dir/typo3-credentials.txt" ]] || continue
     printf '%s\t%s\n' "$name" "$(get_typo3_version "$dir")"
   done
 }
@@ -590,7 +592,10 @@ ddev config \
 # TYPO3 setup, ...) - --list/--cleanup key off this, not typo3-credentials.txt
 # alone, so a run that dies partway still leaves a project --cleanup can find
 # and remove instead of an orphaned DDEV project stuck outside the tool's reach.
-touch .typo3-ddev-setup-marker
+# It lives inside .ddev/ on purpose: 'ddev composer create-project' below refuses
+# to run on a project directory containing anything outside a small whitelist,
+# and .ddev/ is one of the few directories it skips over entirely.
+touch .ddev/.typo3-ddev-setup-marker
 
 # --- Mount extension paths into docker ------------------------------------------
 # EXTENSION_PATHS entries are already resolved to absolute paths and validated above.
@@ -819,8 +824,7 @@ if [[ "$WITH_GIT" -eq 1 ]]; then
     {
       echo ""
       echo "# Added by typo3-ddev-setup.sh --with-git"
-      echo "/.ddev/"
-      echo "/.typo3-ddev-setup-marker"
+      echo "/.ddev/" # also covers .ddev/.typo3-ddev-setup-marker
       echo "/${CREDENTIALS_FILE}"
       echo "/verbose.log"
       echo "/${SETTINGS_FILE}"
