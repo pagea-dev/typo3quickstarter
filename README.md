@@ -1,3 +1,8 @@
+
+
+<div align="center">
+  
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/pageadev)
 [![TYPO3 11.5](https://img.shields.io/badge/TYPO3-11.5-9f9f9f?maxAge=3600&logo=typo3)](https://get.typo3.org/)
 [![TYPO3 12.4](https://img.shields.io/badge/TYPO3-12.4-ff8700?maxAge=3600&logo=typo3)](https://get.typo3.org/)
 [![TYPO3 13.4](https://img.shields.io/badge/TYPO3-13.4-ff8700?maxAge=3600&logo=typo3)](https://get.typo3.org/)
@@ -13,9 +18,20 @@ One-command bash script that spins up disposable TYPO3 instances on [DDEV](https
 
 Built because roughly half of all TYPO3 sites out there are still running on old major versions — this makes it trivial to spin up several versions side by side and see what actually changed.
 
-Got an idea for a feature, or found a bug? [Open an issue](https://github.com/pagea-dev/typo3quickstarter/issues) - feature requests are welcome, not just bug reports.
+Got an idea for a feature, or found a bug? [Open an issue](https://github.com/pagea-dev/typo3quickstarter/issues) - feature requests are welcome, not just bug reports.<br><br>
 
 ![typo3quickstarter demo](demo.gif)
+
+### ☕ Enjoying typo3quickstarter?
+
+Support the development and keep the updates coming. Even 1€ helps :)
+
+<a href="https://ko-fi.com/pageadev">
+  <img src="https://storage.ko-fi.com/cdn/kofi6.png?v=6" alt="Buy me a coffee at ko-fi.com" height="45">
+</a>
+
+</div>
+
 
 ## Prerequisites
 
