@@ -605,8 +605,16 @@ run_uninstall() {
   uninstaller="${dir}/typo3quickstarter-uninstall"
 
   if [[ ! -x "$uninstaller" ]]; then
-    echo "${C_YELLOW}This copy wasn't installed with install.sh, so there is nothing to uninstall.${C_RESET}"
-    echo "Delete ${self} to get rid of it."
+    # Either a portable copy, or one installed before the uninstaller was placed
+    # alongside. Naming just this file would leave the alias symlink behind, so
+    # spell out everything in that directory that points back here.
+    local link
+    echo "${C_YELLOW}No uninstaller next to this copy - remove it by hand:${C_RESET}"
+    echo "    rm -f ${self}"
+    for link in "${dir}"/*; do
+      [[ -L "$link" ]] || continue
+      [[ "$(readlink "$link")" == "$self" ]] && echo "    rm -f ${link}"
+    done
     exit 0
   fi
 
