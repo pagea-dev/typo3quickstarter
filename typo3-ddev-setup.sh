@@ -1099,7 +1099,7 @@ if [[ ${#COMPOSER_DEV_REQUIREMENTS[@]} -gt 0 ]]; then
 fi
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------
-if [[ "$T3_MAJOR" -eq 11 ]]; then
+if [[ "$T3_MAJOR" -le 11 ]]; then
   # TYPO3 v11's native `typo3 setup` command crashes on fresh CLI installs
   # (GeneralUtility::$container is null when DataHandler touches the reference
   # index while creating the admin user - see https://forge.typo3.org/issues/105452).
@@ -1123,6 +1123,9 @@ if [[ "$T3_MAJOR" -eq 11 ]]; then
   ADMIN_EMAIL_ESCAPED="${ADMIN_EMAIL//\'/\'\'}"
   ADMIN_USER_ESCAPED="${ADMIN_USER//\'/\'\'}"
   ddev mysql -e "UPDATE be_users SET email='${ADMIN_EMAIL_ESCAPED}' WHERE username='${ADMIN_USER_ESCAPED}';"
+
+  #create public/typo3conf/AdditionalConfiguration.php
+  ddev exec 'mkdir -p public/typo3conf && [ -e public/typo3conf/AdditionalConfiguration.php ] || printf "%s\n" "<?php" "\$GLOBALS['\''TYPO3_CONF_VARS'\'']['\''SYS'\'']['\''trustedHostsPattern'\''] = '\''.*'\'';" > public/typo3conf/AdditionalConfiguration.php'
 else
   ddev exec ./vendor/bin/typo3 setup \
     --driver=mysqli \
@@ -1139,6 +1142,9 @@ else
     --create-site="https://${PROJECT_NAME}.ddev.site/" \
     --no-interaction \
     --force
+
+  # create config/system/additional.php
+  ddev exec 'mkdir -p config/system && [ -e config/system/additional.php ] || printf "%s\n" "<?php" "\$GLOBALS['\''TYPO3_CONF_VARS'\'']['\''SYS'\'']['\''trustedHostsPattern'\''] = '\''.*'\'';" > config/system/additional.php'
 fi
 
 # --- Extension setup (database schema update + cache flush) -------------------
