@@ -1,15 +1,16 @@
 
 
 <div align="center">
-  
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/pageadev)
+
 [![TYPO3 9.5](https://img.shields.io/badge/TYPO3-9.5-9f9f9f?maxAge=3600&logo=typo3)](https://get.typo3.org/)
 [![TYPO3 10.4](https://img.shields.io/badge/TYPO3-10.4-9f9f9f?maxAge=3600&logo=typo3)](https://get.typo3.org/)
 [![TYPO3 11.5](https://img.shields.io/badge/TYPO3-11.5-9f9f9f?maxAge=3600&logo=typo3)](https://get.typo3.org/)
+<br>
 [![TYPO3 12.4](https://img.shields.io/badge/TYPO3-12.4-ff8700?maxAge=3600&logo=typo3)](https://get.typo3.org/)
 [![TYPO3 13.4](https://img.shields.io/badge/TYPO3-13.4-ff8700?maxAge=3600&logo=typo3)](https://get.typo3.org/)
 [![TYPO3 14.3](https://img.shields.io/badge/TYPO3-14.3-ff8700?maxAge=3600&logo=typo3)](https://get.typo3.org/)
 [![TYPO3 15 dev](https://img.shields.io/badge/TYPO3-15%20dev-6daae0?maxAge=3600&logo=typo3)](https://get.typo3.org/)
+<br>
 [![Bash](https://img.shields.io/badge/Bash-4EAA25?logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
