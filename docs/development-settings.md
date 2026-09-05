@@ -37,4 +37,6 @@ The empty `debugExceptionHandler` is the one worth calling out: it's a deliberat
 
 These are written by reading `settings.php` as PHP and re-exporting the merged array (not a plain text search/replace), so they land correctly whether or not `BE`/`FE` already exist as top-level keys.
 
+On **TYPO3 9, 10 and 11** there is no `settings.php` — configuration still lives in `public/typo3conf/LocalConfiguration.php`, so the same three settings get there a different way. `BE/debug` and `FE/debug` are already switched on by the TYPO3 Console installer those versions use (which throws in `devIPmask` and `displayErrors` as well), and the script sets the empty `debugExceptionHandler` afterwards with `typo3cms configuration:set`. The end result is the same on every version — see [versions.md](versions.md).
+
 What you *don't* get by default is Xdebug - it ships with DDEV but stays off unless you ask for it, since it costs performance on every request. See [xdebug.md](xdebug.md).

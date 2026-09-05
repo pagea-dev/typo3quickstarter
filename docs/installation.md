@@ -35,9 +35,9 @@ The installer tells you what it's about to do — where the script comes from, w
 
 ```
 Source:  latest release on GitHub
-Version: 0.5.0
+Version: 0.7.0
 Target:  /home/you/.local/bin
-Update:  0.4.1 -> 0.5.0
+Update:  0.6.0 -> 0.7.0
 
 Installed into /home/you/.local/bin:
   typo3quickstarter             the TYPO3 instance creator itself
@@ -55,12 +55,12 @@ Fetches the latest release, compares it against what you're running and asks bef
 
 ```
 ==> Checking for a newer release
-Installed: 0.5.0
-Latest:    0.6.0
+Installed: 0.6.0
+Latest:    0.7.0
 
-Install 0.6.0 over 0.5.0? [y/N] y
+Install 0.7.0 over 0.6.0? [y/N] y
 
-==> Updated 0.5.0 -> 0.6.0
+==> Updated 0.6.0 -> 0.7.0
 ```
 
 It only ever moves forward — running a build that's ahead of the latest release (or already on it) is reported and left alone. A copy inside a git checkout is refused, since `git pull` is the right tool there.
@@ -68,10 +68,10 @@ It only ever moves forward — running a build that's ahead of the latest releas
 You don't have to remember to check, though: every normal run compares your version against the latest release and says so if there's a newer one, right under the banner.
 
 ```
-typo3quickstarter v0.5.0 by Pagea Development
+typo3quickstarter v0.6.0 by Pagea Development
 https://github.com/pagea-dev/typo3quickstarter · https://pagea.dev/
 
-An update is available: 0.5.0 -> 0.6.0. Run 'typo3quickstarter update' to get the newest version.
+An update is available: 0.6.0 -> 0.7.0. Run 'typo3quickstarter update' to get the newest version.
 ```
 
 It's a notice and nothing more — nothing is asked, nothing is installed, and the run continues either way. Being offline, having no `curl` or GitHub being unreachable simply skips it silently, and the check gives up after 3 seconds so it can never hold up a setup. It also stays quiet for a copy inside a git checkout, where `git pull` is the right answer instead. Set `TYPO3QUICKSTARTER_NO_UPDATE_CHECK=1` to switch it off completely:

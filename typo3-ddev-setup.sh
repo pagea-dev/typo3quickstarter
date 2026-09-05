@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
-SCRIPT_VERSION="0.6.0"
+SCRIPT_VERSION="0.7.0"
 
 # How this script was started, used wherever the output prints a command the user
 # can copy back: run from a checkout that is "./typo3-ddev-setup.sh", but install.sh
@@ -22,6 +22,27 @@ IS_TTY=0
 # are known - can interpolate them without tripping over `set -u`.
 C_RESET="" C_BOLD="" C_CYAN="" C_GREEN="" C_YELLOW="" C_RED=""
 
+# Bails out with a red first line and any further lines as yellow hints, all on
+# stderr. Defined up here rather than with the other helpers because the argument
+# loop below already needs it - which is also why it must not do anything the
+# empty colors above can't survive.
+die() {
+  echo "${C_RED}$1${C_RESET}" >&2
+  shift
+  local hint
+  for hint in "$@"; do
+    echo "${C_YELLOW}${hint}${C_RESET}" >&2
+  done
+  exit 1
+}
+
+# The three message shapes the rest of the script uses: a "==> " step heading, a
+# warning, and a success line. Same reason as die() for living up here, and same
+# constraint - nothing an empty C_* can't survive.
+step() { echo "${C_CYAN}==> $*${C_RESET}"; }
+warn() { echo "${C_YELLOW}$*${C_RESET}"; }
+ok()   { echo "${C_GREEN}$*${C_RESET}"; }
+
 # --- Defaults ---------------------------------------------------------------
 T3_VERSION=""
 PROJECT_NAME=""
@@ -35,6 +56,7 @@ VERBOSE=0
 WITH_GIT=0
 XDEBUG=0
 PING=1
+PHPMYADMIN=1
 MODE=""
 COMPOSER_REQUIREMENTS=()
 COMPOSER_DEV_REQUIREMENTS=()
@@ -59,7 +81,7 @@ Commands (only for a copy installed with install.sh):
   uninstall               Remove the installed command, its alias and the uninstaller.
 
 Options:
-  -r=N, --release=N      TYPO3 version to install (released: 11, 12, 13, 14; defaults to the
+  -r=N, --release=N      TYPO3 version to install (released: 9, 10, 11, 12, 13, 14; defaults to the
                           highest released version if omitted).
                           Pass just a major version (e.g. 12) to get the newest release on that
                           line, or pin an exact minor/patch release (e.g. 12.4 or 12.4.20). Pinning
@@ -90,6 +112,9 @@ Options:
   --no-ping               Skip the anonymous usage ping this script sends when it creates an
                           instance. The ping is a bare request to ping.pagea.dev with nothing
                           attached to it, used only to count how often the tool gets used.
+  --no-pma                Skip phpMyAdmin. It is installed by default as a DDEV add-on and
+                          comes up with the instance, reachable on port 8037 and already
+                          logged in - see docs/phpmyadmin.md.
   --c, --clear, --cleanup Interactively pick previously created instances and remove them completely
                           (Docker containers/volumes, DDEV project listing, hosts entry, project directory).
                           Optionally followed by one or more name/ID substrings to only consider
@@ -161,6 +186,10 @@ for arg in "$@"; do
     --no-ping)
       CURRENT_OPTION=""
       PING=0
+      ;;
+    --no-pma)
+      CURRENT_OPTION=""
+      PHPMYADMIN=0
       ;;
     --cleanup|--clear|--c)
       CURRENT_OPTION="cleanup_target"
@@ -243,17 +272,12 @@ fi
 
 # --- check if extension paths exist ------------------------------------------
 for i in "${!EXTENSION_PATHS[@]}"; do
+  # Checked before realpath, not after: realpath exits non-zero on a path that
+  # doesn't exist, so under `set -e` the run died on its raw error message and
+  # never reached the one below.
+  [[ -d "${EXTENSION_PATHS[$i]}" ]] || die "Extension path does not exist: ${EXTENSION_PATHS[$i]}"
   EXTENSION_PATHS[$i]="$(realpath "${EXTENSION_PATHS[$i]}")"
-
-  if [[ ! -d "${EXTENSION_PATHS[$i]}" ]]; then
-    echo "${C_RED}Extension path does not exist: ${EXTENSION_PATHS[$i]}${C_RESET}" >&2
-    exit 1
-  fi
-
-  if [[ ! -f "${EXTENSION_PATHS[$i]}/composer.json" ]]; then
-    echo "${C_RED}Extension does not contain a composer.json: ${EXTENSION_PATHS[$i]}${C_RESET}" >&2
-    exit 1
-  fi
+  [[ -f "${EXTENSION_PATHS[$i]}/composer.json" ]] || die "Extension does not contain a composer.json: ${EXTENSION_PATHS[$i]}"
 done
 
 # --- check --env values ------------------------------------------------------
@@ -261,30 +285,28 @@ for i in "${!ENV_VARS[@]}"; do
   env_var="${ENV_VARS[$i]}"
 
   if [[ ! "$env_var" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-    echo "${C_RED}Error: --env value is not a KEY=VALUE pair: ${env_var}${C_RESET}" >&2
-    exit 1
+    die "Error: --env value is not a KEY=VALUE pair: ${env_var}"
   fi
 
   # Every variable ends up in a single comma-separated --web-environment-add
   # string below, which is all 'ddev config' accepts - a comma inside a value
   # would silently split it into a second, bogus variable rather than fail.
   if [[ "$env_var" == *,* ]]; then
-    echo "${C_RED}Error: --env values cannot contain a comma (ddev config takes one comma-separated list): ${env_var}${C_RESET}" >&2
-    echo "${C_YELLOW}Set it in .ddev/config.yaml or .ddev/.env.web after setup instead - see docs/environment-variables.md.${C_RESET}" >&2
-    exit 1
+    die "Error: --env values cannot contain a comma (ddev config takes one comma-separated list): ${env_var}" \
+        "Set it in .ddev/config.yaml or .ddev/.env.web after setup instead - see docs/environment-variables.md."
   fi
 done
 
 # 'update' and 'uninstall' never touch a container, so they must not insist on a
 # working Docker - you can still update a copy on a machine where DDEV is broken.
 if [[ -z "$MODE" ]]; then
-  command -v docker >/dev/null 2>&1 || { echo "${C_RED}Error: docker is not installed or not in PATH.${C_RESET}" >&2; exit 1; }
-  command -v ddev >/dev/null 2>&1 || { echo "${C_RED}Error: ddev is not installed or not in PATH.${C_RESET}" >&2; exit 1; }
-  docker info >/dev/null 2>&1 || { echo "${C_RED}Error: docker daemon is not running.${C_RESET}" >&2; exit 1; }
+  command -v docker >/dev/null 2>&1 || die "Error: docker is not installed or not in PATH."
+  command -v ddev >/dev/null 2>&1 || die "Error: ddev is not installed or not in PATH."
+  docker info >/dev/null 2>&1 || die "Error: docker daemon is not running."
 fi
 if [[ "$WITH_GIT" -eq 1 ]]; then
-  command -v git >/dev/null 2>&1 || { echo "${C_RED}Error: --with-git needs git, which is not installed or not in PATH.${C_RESET}" >&2; exit 1; }
-  [[ -t 0 ]] || { echo "${C_RED}Error: --with-git needs an interactive terminal to ask what to version.${C_RESET}" >&2; exit 1; }
+  command -v git >/dev/null 2>&1 || die "Error: --with-git needs git, which is not installed or not in PATH."
+  [[ -t 0 ]] || die "Error: --with-git needs an interactive terminal to ask what to version."
 fi
 
 PASSWORD_CHARS_UPPER='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -329,6 +351,59 @@ secure_file() {
   fi
 }
 
+# Flags every Composer call in the install pipeline carries. --no-security-blocking
+# is unconditional on purpose (announced once before the install): these are
+# disposable local instances, and without it a plain unpinned install fails as soon
+# as anything in the release line has an advisory against it - which is most of the
+# time on the older lines.
+COMPOSER_ARGS=(--no-interaction --no-security-blocking)
+
+# TYPO3 Console, used for everything TYPO3 11 and older (see the setup step).
+# --raw matters: without it ddev joins the arguments into a shell command inside
+# the container, where an unquoted '.*' globs to '. ..' and an empty string
+# disappears entirely - both of which these calls rely on.
+t3console() {
+  ddev exec --raw ./vendor/bin/typo3cms --no-ansi --no-interaction "$@"
+}
+
+# Brings every installed extension's database tables and caches up to date.
+# Required after composer-requiring extensions: their tables don't exist yet and
+# TYPO3 won't pick up ext_localconf/ext_tables changes until caches are cleared.
+extension_setup() {
+  if [[ "$T3_MAJOR" -le 10 ]]; then
+    # `typo3 extension:setup` only exists from v11 on, and TYPO3 Console's command
+    # of that name wants an explicit list of extension keys - "setupactive" is the
+    # one that takes everything installed. 9 and 10 also still keep the list of
+    # active extensions in PackageStates.php, which knows nothing about anything
+    # composer-required after the install, so regenerate that first or the setup
+    # walks right past those extensions.
+    t3console install:generatepackagestates
+    t3console extension:setupactive
+  else
+    ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
+  fi
+}
+
+# Reads the package name out of a composer.json inside the web container. Empty
+# output means the file was unreadable or has no "name" - callers decide whether
+# that's fatal.
+composer_package_name() {
+  ddev exec --raw php -r '
+      $composer = json_decode(file_get_contents($argv[1]), true);
+      echo $composer["name"] ?? "";
+  ' "$1"
+}
+
+# Makes a directory that lives inside the project (or is mounted into it) available
+# to Composer as a path repository and requires it at :@dev, so edits to the source
+# take effect without a reinstall. Used for --extension and for whatever the
+# kickstarter scaffolds.
+register_local_package() {
+  local repo_name="$1" path="$2" package="$3"
+  ddev composer config "repositories.${repo_name}" path "$path"
+  ddev composer require "${package}:@dev" "${COMPOSER_ARGS[@]}"
+}
+
 # --- cleanup mode -------------------------------------------------------------
 # Reads the exact TYPO3 core version out of composer.lock so the list shows
 # e.g. "12.4.45" instead of just the major version encoded in the folder name.
@@ -363,19 +438,27 @@ find_instances() {
   done
 }
 
-run_list() {
-  local scan_dir="${BASE_PATH%/}"
-  [[ -d "$scan_dir" ]] || { echo "${C_RED}Error: '$scan_dir' does not exist.${C_RESET}" >&2; exit 1; }
+# Fills the caller's NAMES/VERSIONS arrays with what find_instances turned up under
+# $SCAN_DIR, which it sets too (same dynamic-scoping convention as
+# select_via_checklist). Both --list and --cleanup start out exactly like this.
+collect_instances() {
+  SCAN_DIR="${BASE_PATH%/}"
+  [[ -d "$SCAN_DIR" ]] || die "Error: '$SCAN_DIR' does not exist."
 
-  local -a NAMES=() VERSIONS=()
+  NAMES=() VERSIONS=()
   local name version
   while IFS=$'\t' read -r name version; do
     NAMES+=("$name")
     VERSIONS+=("$version")
-  done < <(find_instances "$scan_dir")
+  done < <(find_instances "$SCAN_DIR")
+}
+
+run_list() {
+  local -a NAMES=() VERSIONS=()
+  collect_instances
 
   if [[ ${#NAMES[@]} -eq 0 ]]; then
-    echo "${C_YELLOW}No typo3quickstarter instances found in '${scan_dir}'.${C_RESET}"
+    warn "No typo3quickstarter instances found in '${SCAN_DIR}'."
     exit 0
   fi
 
@@ -401,7 +484,7 @@ confirm_exact_yes() {
 }
 
 abort() {
-  echo "${C_YELLOW}Aborted, nothing deleted.${C_RESET}"
+  warn "Aborted, nothing deleted."
   exit 0
 }
 
@@ -484,17 +567,14 @@ select_via_checklist() {
 }
 
 run_cleanup() {
-  local scan_dir="${BASE_PATH%/}"
-  [[ -d "$scan_dir" ]] || { echo "${C_RED}Error: '$scan_dir' does not exist.${C_RESET}" >&2; exit 1; }
+  local i
+  local -a NAMES=() VERSIONS=() ITEMS=()
+  collect_instances
+  for i in "${!NAMES[@]}"; do
+    ITEMS+=("TYPO3 V${VERSIONS[$i]} | ${NAMES[$i]}")
+  done
 
-  local -a NAMES=() ITEMS=()
-  local name version
-  while IFS=$'\t' read -r name version; do
-    NAMES+=("$name")
-    ITEMS+=("TYPO3 V${version} | ${name}")
-  done < <(find_instances "$scan_dir")
-
-  # "all" (used alone) means every instance found under $scan_dir - skips the
+  # "all" (used alone) means every instance found under $SCAN_DIR - skips the
   # substring filter below entirely, so it can't accidentally be narrowed by an
   # instance that happens to have "all" in its name.
   local ALL_TARGET=0
@@ -502,10 +582,10 @@ run_cleanup() {
     ALL_TARGET=1
   # Otherwise, if one or more targets were given (--c ID [ID...]), narrow down to
   # instances whose name contains any of them - e.g. the 4-char suffix of an
-  # auto-generated name - instead of showing everything found under $scan_dir.
+  # auto-generated name - instead of showing everything found under $SCAN_DIR.
   elif [[ ${#CLEANUP_TARGETS[@]} -gt 0 ]]; then
     local -a matched_names=() matched_items=()
-    local target matched i
+    local target matched
     for i in "${!NAMES[@]}"; do
       matched=0
       for target in "${CLEANUP_TARGETS[@]}"; do
@@ -519,16 +599,15 @@ run_cleanup() {
 
   if [[ ${#NAMES[@]} -eq 0 ]]; then
     if [[ ${#CLEANUP_TARGETS[@]} -gt 0 ]]; then
-      echo "${C_YELLOW}No instance matching ${CLEANUP_TARGETS[*]} found in '${scan_dir}'.${C_RESET}"
+      warn "No instance matching ${CLEANUP_TARGETS[*]} found in '${SCAN_DIR}'."
     else
-      echo "${C_YELLOW}No typo3quickstarter instances found in '${scan_dir}'.${C_RESET}"
+      warn "No typo3quickstarter instances found in '${SCAN_DIR}'."
     fi
     exit 0
   fi
 
   if [[ ! -t 0 ]]; then
-    echo "${C_RED}Error: --cleanup needs an interactive terminal (arrow keys / space / enter).${C_RESET}" >&2
-    exit 1
+    die "Error: --cleanup needs an interactive terminal (arrow keys / space / enter)."
   fi
 
   local -a TO_DELETE=()
@@ -537,7 +616,7 @@ run_cleanup() {
   # listing every instance that would be removed.
   if [[ "$ALL_TARGET" -eq 1 ]]; then
     TO_DELETE=("${NAMES[@]}")
-    echo "${C_YELLOW}Are you sure you want to remove ALL of the following instances?${C_RESET}"
+    warn "Are you sure you want to remove ALL of the following instances?"
     printf '  - %s\n' "${ITEMS[@]}"
     confirm "${C_YELLOW}Proceed?${C_RESET}" || abort
   # Only one candidate - no point showing a single-item checklist, just confirm it.
@@ -549,11 +628,11 @@ run_cleanup() {
     select_via_checklist
 
     if [[ ${#TO_DELETE[@]} -eq 0 ]]; then
-      echo "${C_YELLOW}Nothing selected, nothing deleted.${C_RESET}"
+      warn "Nothing selected, nothing deleted."
       exit 0
     fi
 
-    echo "${C_YELLOW}Are you sure you want to remove the following instances?${C_RESET}"
+    warn "Are you sure you want to remove the following instances?"
     printf '  - %s\n' "${TO_DELETE[@]}"
     confirm "${C_YELLOW}Proceed?${C_RESET}" || abort
   fi
@@ -565,24 +644,24 @@ run_cleanup() {
     # could be sitting in there (--with-git, or something unrelated entirely) -
     # deleting the project directory would wipe it out unrecoverably, so this
     # needs a harder, deliberate confirmation than the one already given above.
-    if find "${scan_dir}/${proj}" -type d -name .git -print -quit 2>/dev/null | grep -q .; then
+    if find "${SCAN_DIR}/${proj}" -type d -name .git -print -quit 2>/dev/null | grep -q .; then
       echo "${C_RED}${C_BOLD}WARNING: found a .git directory inside ${proj} - there's version-controlled work in there that would be permanently lost.${C_RESET}"
       if ! confirm_exact_yes "${C_RED}Type 'yes' (not just 'y') to delete ${proj} anyway - this cannot be undone:${C_RESET}"; then
-        echo "${C_YELLOW}Skipping ${proj}.${C_RESET}"
+        warn "Skipping ${proj}."
         continue
       fi
     fi
 
-    echo "${C_CYAN}==> Removing DDEV project (containers, volumes, DB, hosts entry): ${proj}${C_RESET}"
+    step "Removing DDEV project (containers, volumes, DB, hosts entry): ${proj}"
     if ddev delete -Oy "$proj"; then
-      echo "${C_CYAN}==> Removing project directory: ${scan_dir}/${proj}${C_RESET}"
-      rm -rf "${scan_dir:?}/${proj:?}"
+      step "Removing project directory: ${SCAN_DIR}/${proj}"
+      rm -rf "${SCAN_DIR:?}/${proj:?}"
     else
-      echo "${C_YELLOW}Warning: 'ddev delete' failed for ${proj} - directory left in place, check manually.${C_RESET}" >&2
+      warn "Warning: 'ddev delete' failed for ${proj} - directory left in place, check manually." >&2
     fi
   done
 
-  echo "${C_GREEN}Cleanup done.${C_RESET}"
+  ok "Cleanup done."
 }
 
 # --- update / uninstall -------------------------------------------------------
@@ -644,7 +723,7 @@ run_uninstall() {
     # alongside. Naming just this file would leave the alias symlink behind, so
     # spell out everything in that directory that points back here.
     local link
-    echo "${C_YELLOW}No uninstaller next to this copy - remove it by hand:${C_RESET}"
+    warn "No uninstaller next to this copy - remove it by hand:"
     echo "    rm -f ${self}"
     for link in "${dir}"/*; do
       [[ -L "$link" ]] || continue
@@ -667,12 +746,12 @@ run_update() {
   dir="$(dirname -- "$self")"
 
   if [[ -d "${dir}/.git" ]]; then
-    echo "${C_YELLOW}${self} is inside a git checkout - update it with 'git pull' instead.${C_RESET}" >&2
+    warn "${self} is inside a git checkout - update it with 'git pull' instead." >&2
     exit 1
   fi
-  command -v curl >/dev/null 2>&1 || { echo "${C_RED}Error: 'update' needs curl, which is not in PATH.${C_RESET}" >&2; exit 1; }
+  command -v curl >/dev/null 2>&1 || die "Error: 'update' needs curl, which is not in PATH."
 
-  echo "${C_CYAN}==> Checking for a newer release${C_RESET}"
+  step "Checking for a newer release"
   UPDATE_TMP="$(mktemp)"
   trap 'rm -f "${UPDATE_TMP:-}"' EXIT
   # Asked for explicitly, so give it room - unlike the passive check on a normal
@@ -680,28 +759,25 @@ run_update() {
   rc=0
   latest="$(fetch_release "$UPDATE_TMP" 30)" || rc=$?
   case "$rc" in
-    1) echo "${C_RED}Error: could not download ${UPDATE_URL}${C_RESET}" >&2; exit 1 ;;
-    2) echo "${C_RED}Error: the downloaded file has no version line - not touching anything.${C_RESET}" >&2; exit 1 ;;
+    1) die "Error: could not download ${UPDATE_URL}" ;;
+    2) die "Error: the downloaded file has no version line - not touching anything." ;;
   esac
 
   echo "${C_BOLD}Installed:${C_RESET} ${SCRIPT_VERSION}"
   echo "${C_BOLD}Latest:${C_RESET}    ${latest}"
   if [[ "$latest" == "$SCRIPT_VERSION" ]]; then
-    echo "${C_GREEN}Already up to date.${C_RESET}"
+    ok "Already up to date."
     exit 0
   fi
   if ! version_gt "$latest" "$SCRIPT_VERSION"; then
-    echo "${C_GREEN}Nothing to do - ${SCRIPT_VERSION} is ahead of the latest release.${C_RESET}"
+    ok "Nothing to do - ${SCRIPT_VERSION} is ahead of the latest release."
     exit 0
   fi
 
-  [[ -w "$self" ]] && [[ -w "$dir" ]] || {
-    echo "${C_RED}Error: no write permission on ${self} - re-run with sudo.${C_RESET}" >&2
-    exit 1
-  }
+  [[ -w "$self" ]] && [[ -w "$dir" ]] || die "Error: no write permission on ${self} - re-run with sudo."
 
   echo
-  confirm "${C_YELLOW}Install ${latest} over ${SCRIPT_VERSION}?${C_RESET}" || { echo "${C_YELLOW}Left it at ${SCRIPT_VERSION}.${C_RESET}"; exit 0; }
+  confirm "${C_YELLOW}Install ${latest} over ${SCRIPT_VERSION}?${C_RESET}" || { warn "Left it at ${SCRIPT_VERSION}."; exit 0; }
 
   # Never write into the running file: bash reads it as it goes, and truncating
   # it mid-run feeds it garbage. Staging next to it and renaming swaps the
@@ -771,7 +847,7 @@ print_update_notice
 
 # --- Version map --------------------------------------------------------
 # Ordered lowest to highest. Add further versions here once verified with this script.
-SUPPORTED_VERSIONS=(11 12 13 14)
+SUPPORTED_VERSIONS=(9 10 11 12 13 14)
 # Majors that exist upstream but have no release yet. TYPO3 15 is developed on
 # `main`: neither typo3/cms-core nor typo3/cms-base-distribution publish a 15.x
 # branch on Packagist, so "dev-main" (branch-alias 15.0.x-dev) is the only thing
@@ -790,18 +866,21 @@ is_prerelease() {
 
 if [[ -z "$T3_VERSION" ]]; then
   T3_VERSION="${SUPPORTED_VERSIONS[${#SUPPORTED_VERSIONS[@]}-1]}"
-  echo "${C_CYAN}==> No --release given, defaulting to highest supported version: ${T3_VERSION}${C_RESET}"
+  step "No --release given, defaulting to highest supported version: ${T3_VERSION}"
 fi
 
 # Accept a bare major version (12), or a pinned minor/patch release (12.4, 12.4.20).
 if [[ "$T3_VERSION" =~ ^([0-9]+)(\.[0-9]+){0,2}$ ]]; then
   T3_MAJOR="${BASH_REMATCH[1]}"
 else
-  echo "${C_RED}Error: '--release' must be a version like 12, 12.4 or 12.4.20.${C_RESET}" >&2
-  exit 1
+  die "Error: '--release' must be a version like 12, 12.4 or 12.4.20."
 fi
 
 case "$T3_MAJOR" in
+  # 9.5 and 10.4 predate PHP 8 - their cms-core requires ^7.2, so 7.4 is both the
+  # newest PHP they run on and the last one DDEV still ships an image for.
+  9)  PHP_VERSION="7.4"; COMPOSER_CONSTRAINT="^9.5" ;;
+  10) PHP_VERSION="7.4"; COMPOSER_CONSTRAINT="^10.4" ;;
   11) PHP_VERSION="8.1"; COMPOSER_CONSTRAINT="^11.5" ;;
   12) PHP_VERSION="8.2"; COMPOSER_CONSTRAINT="^12.4" ;;
   13) PHP_VERSION="8.3"; COMPOSER_CONSTRAINT="^13.4" ;;
@@ -809,8 +888,7 @@ case "$T3_MAJOR" in
   # Nothing to point a "^15.0" at yet, and its cms-core asks for PHP ^8.5.
   15) PHP_VERSION="8.5"; COMPOSER_CONSTRAINT="dev-main" ;;
   *)
-    echo "${C_RED}Error: TYPO3 version '$T3_VERSION' is not supported yet (released: ${SUPPORTED_VERSIONS[*]}, pre-release: ${PRERELEASE_VERSIONS[*]}).${C_RESET}" >&2
-    exit 1
+    die "Error: TYPO3 version '$T3_VERSION' is not supported yet (released: ${SUPPORTED_VERSIONS[*]}, pre-release: ${PRERELEASE_VERSIONS[*]})."
     ;;
 esac
 
@@ -828,16 +906,15 @@ if [[ "$T3_VERSION" != "$T3_MAJOR" ]]; then
   # There is no 15.0.1 to pin to - rewriting "dev-main" to a version that does not
   # exist would only fail several minutes later, inside Composer.
   if [[ "$IS_PRERELEASE" -eq 1 ]]; then
-    echo "${C_RED}Error: TYPO3 ${T3_MAJOR} has no releases yet, so '--release=${T3_VERSION}' cannot be pinned to one.${C_RESET}" >&2
-    echo "${C_YELLOW}Use '--release=${T3_MAJOR}' to install the development branch.${C_RESET}" >&2
-    exit 1
+    die "Error: TYPO3 ${T3_MAJOR} has no releases yet, so '--release=${T3_VERSION}' cannot be pinned to one." \
+        "Use '--release=${T3_MAJOR}' to install the development branch."
   fi
   T3_PIN="$T3_VERSION"
 fi
 
 if [[ "$IS_PRERELEASE" -eq 1 ]]; then
-  echo "${C_YELLOW}==> TYPO3 ${T3_MAJOR} has no release yet - installing the development branch (dev-main).${C_RESET}"
-  echo "${C_YELLOW}    Expect breakage, and expect two installs made on different days to differ.${C_RESET}"
+  warn "==> TYPO3 ${T3_MAJOR} has no release yet - installing the development branch (dev-main)."
+  warn "    Expect breakage, and expect two installs made on different days to differ."
 fi
 
 # --- Derived values --------------------------------------------------------
@@ -859,9 +936,8 @@ generate_project_name() {
     PROJECT_NAME="$name"
     return 0
   done
-  echo "${C_RED}Error: no free name left for TYPO3 ${T3_MAJOR} after ${attempt} tries.${C_RESET}" >&2
-  echo "${C_YELLOW}Clean up a few instances, or pass --name=NAME to pick one yourself.${C_RESET}" >&2
-  exit 1
+  die "Error: no free name left for TYPO3 ${T3_MAJOR} after ${attempt} tries." \
+      "Clean up a few instances, or pass --name=NAME to pick one yourself."
 }
 
 if [[ -z "$PROJECT_NAME" ]]; then
@@ -876,14 +952,18 @@ if [[ -z "$ADMIN_EMAIL" ]]; then
   ADMIN_EMAIL="admin@${PROJECT_NAME}.ddev.site"
 fi
 
+# The ddev-phpmyadmin add-on exposes the service on 8036 (HTTP) and 8037 (HTTPS)
+# and hands phpMyAdmin the database credentials itself, so this URL opens straight
+# into the database - there is no login screen to get past.
+PHPMYADMIN_URL="https://${PROJECT_NAME}.ddev.site:8037"
+
 PROJECT_DIR="${BASE_PATH%/}/${PROJECT_NAME}"
 
 if [[ -e "$PROJECT_DIR" ]]; then
-  echo "${C_RED}Error: directory '$PROJECT_DIR' already exists.${C_RESET}" >&2
-  exit 1
+  die "Error: directory '$PROJECT_DIR' already exists."
 fi
 
-echo "${C_CYAN}==> Creating TYPO3 ${T3_VERSION} project '${PROJECT_NAME}' in ${PROJECT_DIR}${C_RESET}"
+step "Creating TYPO3 ${T3_VERSION} project '${PROJECT_NAME}' in ${PROJECT_DIR}"
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 # From here on every path printed is absolute: with the script installed on PATH
@@ -897,7 +977,7 @@ if [[ "$VERBOSE" -eq 1 ]]; then
   # level up for now and move it in once composer is done - see below.
   VERBOSE_LOG_TMP="$(mktemp ../.verbose-log.XXXXXX)"
   exec > >(tee -a "$VERBOSE_LOG_TMP") 2>&1
-  echo "${C_CYAN}==> Verbose logging enabled - full output also written to ${PROJECT_DIR}/verbose.log${C_RESET}"
+  step "Verbose logging enabled - full output also written to ${PROJECT_DIR}/verbose.log"
 fi
 
 # --- DDEV setup --------------------------------------------------------------
@@ -910,7 +990,7 @@ fi
 WEB_ENV=("TYPO3_CONTEXT=Development")
 if [[ ${#ENV_VARS[@]} -gt 0 ]]; then
   WEB_ENV+=("${ENV_VARS[@]}")
-  echo "${C_CYAN}==> Setting environment variables in the web container:${C_RESET}"
+  step "Setting environment variables in the web container:"
   printf '    - %s\n' "${ENV_VARS[@]}"
 fi
 
@@ -945,7 +1025,7 @@ DDEV_CONFIG_ARGS=(
 # config time so it's live from the first 'ddev start' rather than needing a
 # 'ddev xdebug on' (plus the restart it triggers) afterwards.
 if [[ "$XDEBUG" -eq 1 ]]; then
-  echo "${C_CYAN}==> Enabling Xdebug for step debugging${C_RESET}"
+  step "Enabling Xdebug for step debugging"
   DDEV_CONFIG_ARGS+=(--xdebug-enabled=true)
 fi
 
@@ -972,6 +1052,27 @@ if [[ ${#EXTENSION_PATHS[@]} -gt 0 ]]; then
             echo "      - ${EXTENSION_PATHS[$i]}:/mnt/extension-${i}"
         done
     } > .ddev/docker-compose.extensions.yaml
+fi
+
+# --- phpMyAdmin ---------------------------------------------------------------
+# Added here, after 'ddev config' but before the first 'ddev start', so the service
+# comes up together with everything else. Installing an add-on into an already
+# running project only takes effect on the next 'ddev restart' - exactly the detour
+# this is meant to save. Never fatal: the add-on is fetched from GitHub, and an
+# instance without a database GUI is still a perfectly usable instance.
+if [[ "$PHPMYADMIN" -eq 1 ]]; then
+  step "Adding phpMyAdmin (skip with --no-pma)"
+  # 'ddev add-on get' exists since DDEV v1.23.5; older versions - this script asks
+  # for v1.22+ - still carry the since deprecated 'ddev get'.
+  if ddev add-on --help >/dev/null 2>&1; then
+    ADDON_GET=(ddev add-on get)
+  else
+    ADDON_GET=(ddev get)
+  fi
+  if ! "${ADDON_GET[@]}" ddev/ddev-phpmyadmin; then
+    warn "Could not install the phpMyAdmin add-on, continuing without it."
+    PHPMYADMIN=0
+  fi
 fi
 
 # Anonymous usage counter: a bare request, nothing attached, response ignored -
@@ -1003,7 +1104,7 @@ ddev mysql -e "ALTER DATABASE db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_c
 # something at any given time. These are disposable local test instances, never
 # anything running in production, so that block is bypassed throughout on purpose
 # (also needed to intentionally reproduce a bug against an old pinned release).
-echo "${C_CYAN}==> Installing with --no-security-blocking: disposable test instances, not production${C_RESET}"
+step "Installing with --no-security-blocking: disposable test instances, not production"
 
 # Scaffold the base distribution's composer.json without installing yet, so the
 # extra core packages below (and the version pin, if any) land in the same single
@@ -1029,6 +1130,16 @@ if [[ "$IS_PRERELEASE" -eq 1 ]]; then
   ddev composer config --unset platform.php
 fi
 
+# The 9.5 and 10.4 base distributions ship an allow-plugins list written before
+# typo3-console had to be on it, and Composer 2.2+ does not simply skip a plugin
+# that is missing from that list - it aborts the whole install ("contains a Composer
+# plugin which is blocked by your allow-plugins config"). TYPO3 9 pulls in
+# typo3-console 5, which brings helhum/typo3-console-plugin with it, so put it on
+# the list before anything gets installed.
+if [[ "$T3_MAJOR" -le 10 ]]; then
+  ddev composer config --no-plugins allow-plugins.helhum/typo3-console-plugin true
+fi
+
 # typo3/cms-extensionmanager already ships with the base distribution - required
 # again explicitly so it keeps working the same way even if that ever changes.
 # typo3/cms-scheduler doesn't ship by default and is added for the same reason:
@@ -1037,17 +1148,17 @@ fi
 ddev composer require \
   "typo3/cms-scheduler:${COMPOSER_CONSTRAINT}" \
   "typo3/cms-extensionmanager:${COMPOSER_CONSTRAINT}" \
-  --no-interaction --no-install --no-security-blocking
+  --no-install "${COMPOSER_ARGS[@]}"
 
 if [[ -z "$T3_PIN" ]]; then
-  ddev composer install --no-interaction --no-security-blocking
+  ddev composer install "${COMPOSER_ARGS[@]}"
 else
-  echo "${C_CYAN}==> Pinning all TYPO3 core packages to exact version ${T3_PIN}${C_RESET}"
+  step "Pinning all TYPO3 core packages to exact version ${T3_PIN}"
   # Literal (non-glob) replace: swap every "^X.Y" requirement for the pinned exact version.
   COMPOSER_JSON="$(cat composer.json)"
   COMPOSER_JSON="${COMPOSER_JSON//\"$COMPOSER_CONSTRAINT\"/\"$T3_PIN\"}"
   printf '%s\n' "$COMPOSER_JSON" > composer.json
-  ddev composer install --no-interaction --no-security-blocking
+  ddev composer install "${COMPOSER_ARGS[@]}"
 fi
 
 if [[ "$VERBOSE" -eq 1 ]]; then
@@ -1059,70 +1170,84 @@ fi
 for i in "${!EXTENSION_PATHS[@]}"; do
     mount_path="/mnt/extension-${i}"
 
-    package_name="$(
-        ddev exec --raw php -r '
-            $composer = json_decode(
-                file_get_contents($argv[1]),
-                true
-            );
+    package_name="$(composer_package_name "${mount_path}/composer.json")"
+    [[ -n "$package_name" ]] || die "Could not determine Composer package name for ${EXTENSION_PATHS[$i]}"
 
-            echo $composer["name"] ?? "";
-        ' "${mount_path}/composer.json"
-    )"
-
-    if [[ -z "$package_name" ]]; then
-        echo "${C_RED}Could not determine Composer package name for ${EXTENSION_PATHS[$i]}${C_RESET}" >&2
-        exit 1
-    fi
-
-    ddev composer config "repositories.local-extension-${i}" path "$mount_path"
-    ddev composer require "$package_name:@dev" --no-interaction --no-security-blocking
+    register_local_package "local-extension-${i}" "$mount_path" "$package_name"
 done
 
 # --- Additional composer packages ------------------------------------------
 if [[ ${#COMPOSER_REQUIREMENTS[@]} -gt 0 ]]; then
-  echo "${C_CYAN}==> Installing additional Composer requirements:${C_RESET}"
+  step "Installing additional Composer requirements:"
   printf '    - %s\n' "${COMPOSER_REQUIREMENTS[@]}"
 
   ddev composer require \
     "${COMPOSER_REQUIREMENTS[@]}" \
-    --no-interaction --no-security-blocking
+    "${COMPOSER_ARGS[@]}"
 fi
 
 if [[ ${#COMPOSER_DEV_REQUIREMENTS[@]} -gt 0 ]]; then
-  echo "${C_CYAN}==> Installing additional Composer requirements for development:${C_RESET}"
+  step "Installing additional Composer requirements for development:"
   printf '    - %s\n' "${COMPOSER_DEV_REQUIREMENTS[@]}"
 
   ddev composer require --dev \
     "${COMPOSER_DEV_REQUIREMENTS[@]}" \
-    --no-interaction --no-security-blocking
+    "${COMPOSER_ARGS[@]}"
 fi
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------
-if [[ "$T3_MAJOR" -eq 11 ]]; then
-  # TYPO3 v11's native `typo3 setup` command crashes on fresh CLI installs
-  # (GeneralUtility::$container is null when DataHandler touches the reference
-  # index while creating the admin user - see https://forge.typo3.org/issues/105452).
-  # v11 is EOL and this was closed as won't-fix, so use the legacy typo3-console
-  # installer instead, which doesn't have this bug.
-  ddev exec ./vendor/bin/typo3cms --no-ansi --no-interaction install:setup \
-    --force \
-    --database-driver=mysqli \
-    --database-user-name=db \
-    --database-user-password=db \
-    --database-host-name=db \
-    --database-port=3306 \
-    --database-name=db \
-    --use-existing-database \
-    --admin-user-name="$ADMIN_USER" \
-    --admin-password="$ADMIN_PASSWORD" \
-    --site-name="$PROJECT_NAME" \
-    --site-setup-type=site \
-    --site-base-url="https://${PROJECT_NAME}.ddev.site/"
+if [[ "$T3_MAJOR" -le 11 ]]; then
+  # 9 and 10 have no native setup command at all, and v11's `typo3 setup` crashes on
+  # fresh CLI installs (GeneralUtility::$container is null when DataHandler touches
+  # the reference index while creating the admin user - see
+  # https://forge.typo3.org/issues/105452, closed won't-fix since v11 is EOL). All
+  # three are installed with typo3-console instead, which ships with their base
+  # distribution and doesn't have that bug.
+  SETUP_ARGS=(
+    --force
+    --database-driver=mysqli
+    --database-user-name=db
+    --database-user-password=db
+    --database-host-name=db
+    --database-port=3306
+    --database-name=db
+    --use-existing-database
+    --admin-user-name="$ADMIN_USER"
+    --admin-password="$ADMIN_PASSWORD"
+    --site-name="$PROJECT_NAME"
+    --site-setup-type=site
+  )
+  # --site-base-url arrived with typo3-console 6, which is what TYPO3 10 pulls in.
+  # TYPO3 9 gets typo3-console 5, where passing it aborts the whole install with
+  # "option does not exist" - its site is created with the default base "/", which
+  # works fine on a local instance reached under a single hostname.
+  if [[ "$T3_MAJOR" -ge 10 ]]; then
+    SETUP_ARGS+=(--site-base-url="https://${PROJECT_NAME}.ddev.site/")
+  fi
+  t3console install:setup "${SETUP_ARGS[@]}"
   # install:setup has no --admin-email flag, so set it separately.
   ADMIN_EMAIL_ESCAPED="${ADMIN_EMAIL//\'/\'\'}"
   ADMIN_USER_ESCAPED="${ADMIN_USER//\'/\'\'}"
   ddev mysql -e "UPDATE be_users SET email='${ADMIN_EMAIL_ESCAPED}' WHERE username='${ADMIN_USER_ESCAPED}';"
+
+  # With no --site-base-url to hand it (see above), TYPO3 9 falls back to deriving the
+  # base from the current request while creating the root page - and on the CLI there
+  # is none, so it writes a nonsense "base: ht/" that no incoming request can ever
+  # match ("Unable to determine site"). Put the real URL in afterwards. Only the
+  # top-level key is touched; the indented per-language bases stay as they are.
+  if [[ "$T3_MAJOR" -le 9 ]]; then
+    for SITE_CONFIG in config/sites/*/config.yaml; do
+      [[ -f "$SITE_CONFIG" ]] || continue
+      while IFS= read -r line; do
+        if [[ "$line" == base:* ]]; then
+          printf '%s\n' "base: https://${PROJECT_NAME}.ddev.site/"
+        else
+          printf '%s\n' "$line"
+        fi
+      done < "$SITE_CONFIG" > "${SITE_CONFIG}.tmp"
+      mv "${SITE_CONFIG}.tmp" "$SITE_CONFIG"
+    done
+  fi
 else
   ddev exec ./vendor/bin/typo3 setup \
     --driver=mysqli \
@@ -1142,9 +1267,7 @@ else
 fi
 
 # --- Extension setup (database schema update + cache flush) -------------------
-# Required after composer-requiring extensions above: their DB tables don't exist yet
-# and TYPO3 won't pick up ext_localconf/ext_tables changes until caches are cleared.
-ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
+extension_setup
 
 # --- Trusted hosts pattern -------------------------------------------------------
 # TYPO3's default trustedHostsPattern ('SERVER_NAME') requires SERVER_PORT to match
@@ -1161,6 +1284,16 @@ if [[ -f "$SETTINGS_FILE" ]]; then
         'trustedHostsPattern' => '.*',"
   SETTINGS_PHP="${SETTINGS_PHP/$SEARCH/$REPLACE}"
   printf '%s\n' "$SETTINGS_PHP" > "$SETTINGS_FILE"
+fi
+# v11 keeps its configuration in public/typo3conf/LocalConfiguration.php - there is
+# no config/system/settings.php yet, so the replace above finds no file and silently
+# does nothing, leaving every request to fail with exactly that error. Write the same
+# setting through typo3-console instead, which ships with the v11 base distribution
+# and already runs the setup step above. --raw is required: without it ddev joins the
+# arguments into a shell command inside the container, where the unquoted '.*' globs
+# to '. ..' and typo3cms aborts with "Too many arguments".
+if [[ "$T3_MAJOR" -le 11 ]]; then
+  t3console configuration:set SYS/trustedHostsPattern '.*'
 fi
 
 # --- Debug settings ---------------------------------------------------------
@@ -1180,6 +1313,13 @@ if [[ -f "$SETTINGS_FILE" ]]; then
       file_put_contents($file, "<?php\nreturn " . var_export($config, true) . ";\n");
   ' "$SETTINGS_FILE"
 fi
+if [[ "$T3_MAJOR" -le 11 ]]; then
+  # No settings.php on these, so the block above never ran - same story as the
+  # trusted hosts pattern. Only the exception handler is missing though: their
+  # typo3-console install:setup already turns BE/FE debug on for the Development
+  # context (and adds devIPmask/displayErrors on top).
+  t3console configuration:set SYS/debugExceptionHandler ''
+fi
 
 # --- Credentials file ---------------------------------------------------------
 # Written at the project root (outside the "public" docroot) so it's never web-accessible.
@@ -1190,6 +1330,13 @@ Created: $(date '+%Y-%m-%d %H:%M:%S')
 
 Frontend: https://${PROJECT_NAME}.ddev.site/
 Backend:  https://${PROJECT_NAME}.ddev.site/typo3
+CREDS
+
+if [[ "$PHPMYADMIN" -eq 1 ]]; then
+  echo "phpMyAdmin: ${PHPMYADMIN_URL}" >> "$CREDENTIALS_FILE"
+fi
+
+cat >> "$CREDENTIALS_FILE" <<CREDS
 
 Admin user:     ${ADMIN_USER}
 Admin password: ${ADMIN_PASSWORD}
@@ -1207,14 +1354,14 @@ fi
 # --- --with-git: optional version control setup -------------------------------
 if [[ "$WITH_GIT" -eq 1 ]]; then
   echo
-  echo "${C_CYAN}==> --with-git: what should be put under version control?${C_RESET}"
+  step "--with-git: what should be put under version control?"
   echo "  1) The whole TYPO3 project"
   echo "  2) A new extension only (scaffolded fresh under packages/<name>)"
   GIT_CHOICE=""
   read -rp "Choice [1/2]: " GIT_CHOICE
 
   if [[ "$GIT_CHOICE" == "1" ]]; then
-    echo "${C_CYAN}==> Initializing git for the whole project${C_RESET}"
+    step "Initializing git for the whole project"
     git init >/dev/null
     # typo3/cms-base-distribution already ships a .gitignore covering vendor/,
     # var/ (except var/labels), and most of public/ - append what it doesn't:
@@ -1230,19 +1377,20 @@ if [[ "$WITH_GIT" -eq 1 ]]; then
     } >> .gitignore
     git add -A
     if git commit -m "Initial commit" >/dev/null 2>&1; then
-      echo "${C_GREEN}Git repository initialized and committed at ${PROJECT_DIR}${C_RESET}"
+      ok "Git repository initialized and committed at ${PROJECT_DIR}"
     else
-      echo "${C_YELLOW}Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged.${C_RESET}"
+      warn "Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged."
     fi
   elif [[ "$GIT_CHOICE" == "2" ]]; then
-    # friendsoftypo3/kickstarter has no TYPO3 11 release (0.1.x targets ^12.4.8,
-    # up to 0.4.x/main targeting ^14) - see https://github.com/FriendsOfTYPO3/kickstarter.
-    if [[ "$T3_MAJOR" -eq 11 ]]; then
-      echo "${C_YELLOW}--with-git: the TYPO3 extension kickstarter needs TYPO3 12+ (this instance is TYPO3 11), skipping.${C_RESET}"
+    # friendsoftypo3/kickstarter has no release for anything below TYPO3 12 (0.1.x
+    # targets ^12.4.8, up to 0.4.x/main targeting ^14) - see
+    # https://github.com/FriendsOfTYPO3/kickstarter.
+    if [[ "$T3_MAJOR" -le 11 ]]; then
+      warn "--with-git: the TYPO3 extension kickstarter needs TYPO3 12+ (this instance is TYPO3 ${T3_MAJOR}), skipping."
     else
-      echo "${C_CYAN}==> Installing friendsoftypo3/kickstarter (dev dependency)${C_RESET}"
-      if ddev composer require --dev friendsoftypo3/kickstarter --no-interaction --no-security-blocking; then
-        ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
+      step "Installing friendsoftypo3/kickstarter (dev dependency)"
+      if ddev composer require --dev friendsoftypo3/kickstarter "${COMPOSER_ARGS[@]}"; then
+        extension_setup
 
         mkdir -p packages
         # Point the kickstarter at packages/ instead of its typo3temp/ext-kickstarter/
@@ -1262,27 +1410,21 @@ if [[ "$WITH_GIT" -eq 1 ]]; then
         # how to ask. Diff packages/ before and after to find what it created,
         # since there's no other way to learn the extension key it was given.
         EXT_DIRS_BEFORE="$(find packages -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)"
-        echo "${C_CYAN}==> Launching the TYPO3 extension kickstarter - follow the prompts${C_RESET}"
+        step "Launching the TYPO3 extension kickstarter - follow the prompts"
         if ddev exec ./vendor/bin/typo3 make:extension; then
           EXT_DIRS_AFTER="$(find packages -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)"
           NEW_EXT_DIR="$(comm -13 <(echo "$EXT_DIRS_BEFORE") <(echo "$EXT_DIRS_AFTER"))"
 
           if [[ -z "$NEW_EXT_DIR" ]] || [[ "$(wc -l <<< "$NEW_EXT_DIR")" -ne 1 ]]; then
-            echo "${C_YELLOW}Could not tell which extension the kickstarter created - nothing to put under git, check packages/ and run 'git init' there yourself if you want one.${C_RESET}"
+            warn "Could not tell which extension the kickstarter created - nothing to put under git, check packages/ and run 'git init' there yourself if you want one."
           else
             # Same registration --extension already does for a mounted extension:
             # a Composer path repository, then require it at :@dev.
-            package_name="$(
-              ddev exec --raw php -r '
-                  $composer = json_decode(file_get_contents($argv[1]), true);
-                  echo $composer["name"] ?? "";
-              ' "${NEW_EXT_DIR}/composer.json"
-            )"
+            package_name="$(composer_package_name "${NEW_EXT_DIR}/composer.json")"
             if [[ -n "$package_name" ]]; then
-              echo "${C_CYAN}==> Registering ${NEW_EXT_DIR} (${package_name}) with Composer${C_RESET}"
-              ddev composer config "repositories.$(basename "$NEW_EXT_DIR")" path "$NEW_EXT_DIR"
-              ddev composer require "${package_name}:@dev" --no-interaction --no-security-blocking
-              ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
+              step "Registering ${NEW_EXT_DIR} (${package_name}) with Composer"
+              register_local_package "$(basename "$NEW_EXT_DIR")" "$NEW_EXT_DIR" "$package_name"
+              extension_setup
             fi
 
             (
@@ -1290,21 +1432,21 @@ if [[ "$WITH_GIT" -eq 1 ]]; then
               git init >/dev/null
               git add -A
               if git commit -m "Initial commit" >/dev/null 2>&1; then
-                echo "${C_GREEN}Git repository initialized and committed at ${PROJECT_DIR}/${NEW_EXT_DIR}${C_RESET}"
+                ok "Git repository initialized and committed at ${PROJECT_DIR}/${NEW_EXT_DIR}"
               else
-                echo "${C_YELLOW}Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged.${C_RESET}"
+                warn "Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged."
               fi
             )
           fi
         else
-          echo "${C_YELLOW}Kickstarter run failed or was cancelled - nothing to put under git.${C_RESET}"
+          warn "Kickstarter run failed or was cancelled - nothing to put under git."
         fi
       else
-        echo "${C_YELLOW}Could not install friendsoftypo3/kickstarter, skipping.${C_RESET}"
+        warn "Could not install friendsoftypo3/kickstarter, skipping."
       fi
     fi
   else
-    echo "${C_YELLOW}--with-git: invalid choice, skipping.${C_RESET}"
+    warn "--with-git: invalid choice, skipping."
   fi
 fi
 
@@ -1315,6 +1457,9 @@ echo "${C_BOLD}Backend:${C_RESET}     https://${PROJECT_NAME}.ddev.site/typo3"
 echo "${C_BOLD}Admin:${C_RESET}       ${ADMIN_USER}"
 echo "${C_BOLD}Password:${C_RESET}    ${ADMIN_PASSWORD}"
 echo "${C_BOLD}Credentials:${C_RESET} ${PROJECT_DIR}/${CREDENTIALS_FILE}"
+if [[ "$PHPMYADMIN" -eq 1 ]]; then
+  echo "${C_BOLD}phpMyAdmin:${C_RESET}  ${PHPMYADMIN_URL} (or 'ddev phpmyadmin' inside the project)"
+fi
 if [[ "$VERBOSE" -eq 1 ]]; then
   echo "${C_BOLD}Verbose log:${C_RESET} ${PROJECT_DIR}/${VERBOSE_LOG}"
 fi
