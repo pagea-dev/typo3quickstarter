@@ -96,8 +96,10 @@ TYPO3 9.5, 10.4 and 11.5 are all long past end of life. They're here for one rea
 
 **They run on PHP 7.4.** Their `typo3/cms-core` requires PHP `^7.2`, so 7.4 is the newest they run on. DDEV still ships that image, but expect your IDE and any modern tooling to complain about the language level.
 
-**9 and 10 still have `PackageStates.php`.** Extensions added with `--require`/`--extension` only become active once that file is regenerated, so the script runs `install:generatepackagestates` before the extension setup. From v11 on, that file is gone.
+**9 and 10 still have `PackageStates.php`.** Extensions added with `--require`/`--extension` only become active once that file is regenerated, so the script runs `install:generatepackagestates` before setting the extensions up (with `extension:setupactive` — TYPO3 Console's own `extension:setup` wants an explicit list of extension keys). From v11 on, that file is gone.
 
-**TYPO3 9 gets a site config with base `/`.** The `--site-base-url` option only arrived with TYPO3 Console 6 (TYPO3 10); on 9 it aborts the install outright. A base of `/` is fine for an instance reached under a single hostname — adjust it in the backend's *Sites* module if you need an absolute one.
+**Their `allow-plugins` list is out of date.** Both distributions ship a Composer `allow-plugins` list from before TYPO3 Console's plugin had to be on it, and Composer 2.2+ doesn't skip a plugin that's missing from it — it aborts the whole install. The script adds the entry before installing.
+
+**TYPO3 9 needs its site base repaired.** The `--site-base-url` option only arrived with TYPO3 Console 6 (TYPO3 10); on 9 it aborts the install outright, and TYPO3 9 then derives the base from the current request — which on the CLI doesn't exist, leaving a nonsense `base: ht/` behind that no request can match. The script writes the real URL into `config/sites/*/config.yaml` afterwards, so the frontend comes up like on any other version.
 
 **The extension kickstarter needs 12+.** `--with-git` still versions the whole project on 9, 10 and 11, but the "scaffold a new extension" option is skipped with a note.

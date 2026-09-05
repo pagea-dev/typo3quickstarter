@@ -1067,6 +1067,16 @@ if [[ "$IS_PRERELEASE" -eq 1 ]]; then
   ddev composer config --unset platform.php
 fi
 
+# The 9.5 and 10.4 base distributions ship an allow-plugins list written before
+# typo3-console had to be on it, and Composer 2.2+ does not simply skip a plugin
+# that is missing from that list - it aborts the whole install ("contains a Composer
+# plugin which is blocked by your allow-plugins config"). TYPO3 9 pulls in
+# typo3-console 5, which brings helhum/typo3-console-plugin with it, so put it on
+# the list before anything gets installed.
+if [[ "$T3_MAJOR" -le 10 ]]; then
+  ddev composer config --no-plugins allow-plugins.helhum/typo3-console-plugin true
+fi
+
 # typo3/cms-extensionmanager already ships with the base distribution - required
 # again explicitly so it keeps working the same way even if that ever changes.
 # typo3/cms-scheduler doesn't ship by default and is added for the same reason:
@@ -1170,6 +1180,25 @@ if [[ "$T3_MAJOR" -le 11 ]]; then
   ADMIN_EMAIL_ESCAPED="${ADMIN_EMAIL//\'/\'\'}"
   ADMIN_USER_ESCAPED="${ADMIN_USER//\'/\'\'}"
   ddev mysql -e "UPDATE be_users SET email='${ADMIN_EMAIL_ESCAPED}' WHERE username='${ADMIN_USER_ESCAPED}';"
+
+  # With no --site-base-url to hand it (see above), TYPO3 9 falls back to deriving the
+  # base from the current request while creating the root page - and on the CLI there
+  # is none, so it writes a nonsense "base: ht/" that no incoming request can ever
+  # match ("Unable to determine site"). Put the real URL in afterwards. Only the
+  # top-level key is touched; the indented per-language bases stay as they are.
+  if [[ "$T3_MAJOR" -le 9 ]]; then
+    for SITE_CONFIG in config/sites/*/config.yaml; do
+      [[ -f "$SITE_CONFIG" ]] || continue
+      while IFS= read -r line; do
+        if [[ "$line" == base:* ]]; then
+          printf '%s\n' "base: https://${PROJECT_NAME}.ddev.site/"
+        else
+          printf '%s\n' "$line"
+        fi
+      done < "$SITE_CONFIG" > "${SITE_CONFIG}.tmp"
+      mv "${SITE_CONFIG}.tmp" "$SITE_CONFIG"
+    done
+  fi
 else
   ddev exec ./vendor/bin/typo3 setup \
     --driver=mysqli \
@@ -1197,8 +1226,11 @@ if [[ "$T3_MAJOR" -le 10 ]]; then
   # PackageStates.php, which knows nothing about anything composer-required after the
   # install - regenerate it first, or those extensions stay inactive and the setup
   # below skips right over them.
+  # `extension:setupactive`, not `extension:setup`: the typo3-console command of that
+  # name takes a mandatory list of extension keys and aborts without one, while the
+  # v11+ core command it looks like sets up everything installed.
   ddev exec ./vendor/bin/typo3cms --no-ansi --no-interaction install:generatepackagestates
-  ddev exec ./vendor/bin/typo3cms --no-ansi --no-interaction extension:setup
+  ddev exec ./vendor/bin/typo3cms --no-ansi --no-interaction extension:setupactive
 else
   ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
 fi
