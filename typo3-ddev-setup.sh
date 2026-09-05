@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
-SCRIPT_VERSION="0.6.0"
+SCRIPT_VERSION="0.7.0"
 
 # How this script was started, used wherever the output prints a command the user
 # can copy back: run from a checkout that is "./typo3-ddev-setup.sh", but install.sh
