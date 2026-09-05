@@ -1279,6 +1279,13 @@ if [[ -f "$SETTINGS_FILE" ]]; then
       file_put_contents($file, "<?php\nreturn " . var_export($config, true) . ";\n");
   ' "$SETTINGS_FILE"
 fi
+if [[ "$T3_MAJOR" -le 11 ]]; then
+  # No settings.php on these, so the block above never ran - same story as the
+  # trusted hosts pattern. Only the exception handler is missing though: their
+  # typo3-console install:setup already turns BE/FE debug on for the Development
+  # context (and adds devIPmask/displayErrors on top).
+  ddev exec --raw ./vendor/bin/typo3cms --no-ansi --no-interaction configuration:set SYS/debugExceptionHandler ''
+fi
 
 # --- Credentials file ---------------------------------------------------------
 # Written at the project root (outside the "public" docroot) so it's never web-accessible.
