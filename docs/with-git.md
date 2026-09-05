@@ -37,7 +37,7 @@ Rather than hand-rolling a scaffold, this installs and runs [friendsoftypo3/kick
 ==> Launching the TYPO3 extension kickstarter - follow the prompts
 ```
 
-Requires TYPO3 12+ (the kickstarter has no TYPO3 11 release - `--with-git` skips this option with a note if the instance is v11). Installed as a `--dev` Composer requirement, since it's a scaffolding tool, not something the resulting extension needs at runtime. Composer resolves whichever kickstarter release matches the installed core automatically (`^0.1` for TYPO3 12, `^0.3` for TYPO3 13, `^0.4`+ for TYPO3 14) - no version needs pinning by hand.
+Requires TYPO3 12+ (the kickstarter has no release for the older lines - `--with-git` skips this option with a note on TYPO3 9, 10 and 11). Installed as a `--dev` Composer requirement, since it's a scaffolding tool, not something the resulting extension needs at runtime. Composer resolves whichever kickstarter release matches the installed core automatically (`^0.1` for TYPO3 12, `^0.3` for TYPO3 13, `^0.4`+ for TYPO3 14) - no version needs pinning by hand.
 
 Before launching it, the kickstarter's own `exportDirectory` setting (extension key `ext_kickstarter` - its composer.json still carries the pre-FriendsOfTYPO3-adoption name `stefanfroemken/ext-kickstarter`) is set to `packages/` in `settings.php`, matching what its own README recommends for Composer setups - its default, `typo3temp/ext-kickstarter/`, is regenerable scratch space, not somewhere you'd want to keep real extension code.
 

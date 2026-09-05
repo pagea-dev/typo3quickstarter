@@ -60,7 +60,7 @@ Commands (only for a copy installed with install.sh):
   uninstall               Remove the installed command, its alias and the uninstaller.
 
 Options:
-  -r=N, --release=N      TYPO3 version to install (released: 11, 12, 13, 14; defaults to the
+  -r=N, --release=N      TYPO3 version to install (released: 9, 10, 11, 12, 13, 14; defaults to the
                           highest released version if omitted).
                           Pass just a major version (e.g. 12) to get the newest release on that
                           line, or pin an exact minor/patch release (e.g. 12.4 or 12.4.20). Pinning
@@ -779,7 +779,7 @@ print_update_notice
 
 # --- Version map --------------------------------------------------------
 # Ordered lowest to highest. Add further versions here once verified with this script.
-SUPPORTED_VERSIONS=(11 12 13 14)
+SUPPORTED_VERSIONS=(9 10 11 12 13 14)
 # Majors that exist upstream but have no release yet. TYPO3 15 is developed on
 # `main`: neither typo3/cms-core nor typo3/cms-base-distribution publish a 15.x
 # branch on Packagist, so "dev-main" (branch-alias 15.0.x-dev) is the only thing
@@ -810,6 +810,10 @@ else
 fi
 
 case "$T3_MAJOR" in
+  # 9.5 and 10.4 predate PHP 8 - their cms-core requires ^7.2, so 7.4 is both the
+  # newest PHP they run on and the last one DDEV still ships an image for.
+  9)  PHP_VERSION="7.4"; COMPOSER_CONSTRAINT="^9.5" ;;
+  10) PHP_VERSION="7.4"; COMPOSER_CONSTRAINT="^10.4" ;;
   11) PHP_VERSION="8.1"; COMPOSER_CONSTRAINT="^11.5" ;;
   12) PHP_VERSION="8.2"; COMPOSER_CONSTRAINT="^12.4" ;;
   13) PHP_VERSION="8.3"; COMPOSER_CONSTRAINT="^13.4" ;;
@@ -1134,25 +1138,34 @@ fi
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------
 if [[ "$T3_MAJOR" -le 11 ]]; then
-  # TYPO3 v11's native `typo3 setup` command crashes on fresh CLI installs
-  # (GeneralUtility::$container is null when DataHandler touches the reference
-  # index while creating the admin user - see https://forge.typo3.org/issues/105452).
-  # v11 is EOL and this was closed as won't-fix, so use the legacy typo3-console
-  # installer instead, which doesn't have this bug.
-  ddev exec ./vendor/bin/typo3cms --no-ansi --no-interaction install:setup \
-    --force \
-    --database-driver=mysqli \
-    --database-user-name=db \
-    --database-user-password=db \
-    --database-host-name=db \
-    --database-port=3306 \
-    --database-name=db \
-    --use-existing-database \
-    --admin-user-name="$ADMIN_USER" \
-    --admin-password="$ADMIN_PASSWORD" \
-    --site-name="$PROJECT_NAME" \
-    --site-setup-type=site \
-    --site-base-url="https://${PROJECT_NAME}.ddev.site/"
+  # 9 and 10 have no native setup command at all, and v11's `typo3 setup` crashes on
+  # fresh CLI installs (GeneralUtility::$container is null when DataHandler touches
+  # the reference index while creating the admin user - see
+  # https://forge.typo3.org/issues/105452, closed won't-fix since v11 is EOL). All
+  # three are installed with typo3-console instead, which ships with their base
+  # distribution and doesn't have that bug.
+  SETUP_ARGS=(
+    --force
+    --database-driver=mysqli
+    --database-user-name=db
+    --database-user-password=db
+    --database-host-name=db
+    --database-port=3306
+    --database-name=db
+    --use-existing-database
+    --admin-user-name="$ADMIN_USER"
+    --admin-password="$ADMIN_PASSWORD"
+    --site-name="$PROJECT_NAME"
+    --site-setup-type=site
+  )
+  # --site-base-url arrived with typo3-console 6, which is what TYPO3 10 pulls in.
+  # TYPO3 9 gets typo3-console 5, where passing it aborts the whole install with
+  # "option does not exist" - its site is created with the default base "/", which
+  # works fine on a local instance reached under a single hostname.
+  if [[ "$T3_MAJOR" -ge 10 ]]; then
+    SETUP_ARGS+=(--site-base-url="https://${PROJECT_NAME}.ddev.site/")
+  fi
+  ddev exec ./vendor/bin/typo3cms --no-ansi --no-interaction install:setup "${SETUP_ARGS[@]}"
   # install:setup has no --admin-email flag, so set it separately.
   ADMIN_EMAIL_ESCAPED="${ADMIN_EMAIL//\'/\'\'}"
   ADMIN_USER_ESCAPED="${ADMIN_USER//\'/\'\'}"
@@ -1178,7 +1191,17 @@ fi
 # --- Extension setup (database schema update + cache flush) -------------------
 # Required after composer-requiring extensions above: their DB tables don't exist yet
 # and TYPO3 won't pick up ext_localconf/ext_tables changes until caches are cleared.
-ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
+if [[ "$T3_MAJOR" -le 10 ]]; then
+  # `typo3 extension:setup` only exists from v11 on; before that the same job belongs
+  # to typo3-console. 9 and 10 also still keep the list of active extensions in
+  # PackageStates.php, which knows nothing about anything composer-required after the
+  # install - regenerate it first, or those extensions stay inactive and the setup
+  # below skips right over them.
+  ddev exec ./vendor/bin/typo3cms --no-ansi --no-interaction install:generatepackagestates
+  ddev exec ./vendor/bin/typo3cms --no-ansi --no-interaction extension:setup
+else
+  ddev exec ./vendor/bin/typo3 extension:setup --no-interaction
+fi
 
 # --- Trusted hosts pattern -------------------------------------------------------
 # TYPO3's default trustedHostsPattern ('SERVER_NAME') requires SERVER_PORT to match
@@ -1286,10 +1309,11 @@ if [[ "$WITH_GIT" -eq 1 ]]; then
       echo "${C_YELLOW}Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged.${C_RESET}"
     fi
   elif [[ "$GIT_CHOICE" == "2" ]]; then
-    # friendsoftypo3/kickstarter has no TYPO3 11 release (0.1.x targets ^12.4.8,
-    # up to 0.4.x/main targeting ^14) - see https://github.com/FriendsOfTYPO3/kickstarter.
-    if [[ "$T3_MAJOR" -eq 11 ]]; then
-      echo "${C_YELLOW}--with-git: the TYPO3 extension kickstarter needs TYPO3 12+ (this instance is TYPO3 11), skipping.${C_RESET}"
+    # friendsoftypo3/kickstarter has no release for anything below TYPO3 12 (0.1.x
+    # targets ^12.4.8, up to 0.4.x/main targeting ^14) - see
+    # https://github.com/FriendsOfTYPO3/kickstarter.
+    if [[ "$T3_MAJOR" -le 11 ]]; then
+      echo "${C_YELLOW}--with-git: the TYPO3 extension kickstarter needs TYPO3 12+ (this instance is TYPO3 ${T3_MAJOR}), skipping.${C_RESET}"
     else
       echo "${C_CYAN}==> Installing friendsoftypo3/kickstarter (dev dependency)${C_RESET}"
       if ddev composer require --dev friendsoftypo3/kickstarter --no-interaction --no-security-blocking; then

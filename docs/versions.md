@@ -20,6 +20,8 @@ Currently supported major versions:
 
 | `--release` | PHP | Composer constraint |
 |---|---|---|
+| 9  | 7.4 | `^9.5` |
+| 10 | 7.4 | `^10.4` |
 | 11 | 8.1 | `^11.5` |
 | 12 | 8.2 | `^12.4` |
 | 13 | 8.3 | `^13.4` |
@@ -86,6 +88,16 @@ Every Composer install/require in this script passes `--no-security-blocking`, p
 
 Composer normally refuses to install any package version flagged by a known security advisory - and since there's essentially always something flagged somewhere in a TYPO3 release line, this can otherwise block even a completely plain, unpinned `--release=13` the moment Composer has to freshly resolve the full dependency tree (e.g. nothing yet locked, as right after `create-project`). Pinning an old patch release on purpose to reproduce a bug is the most common reason you'd actually want an affected version installed, but the block is bypassed unconditionally rather than only when pinning, since it would otherwise resurface unpredictably. These are disposable local test instances, never anything running in production, so that trade-off is fine here.
 
-## TYPO3 v11 note
+## The old ones: 9, 10 and 11
 
-TYPO3 v11's native `typo3 setup` CLI command crashes on fresh installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). For `--release=11` the script automatically falls back to the legacy `typo3cms install:setup` installer instead, which doesn't have this bug.
+TYPO3 9.5, 10.4 and 11.5 are all long past end of life. They're here for one reason: getting an old extension in front of a running instance of the version it was written for, so you can start moving it forward. Everything the script does works the same way on them — `--extension`, `--require`, `--with-git`, cleanup — but a few things are worth knowing.
+
+**They install differently.** None of them uses TYPO3's own `typo3 setup`: 9 and 10 have no such command at all, and v11's crashes on fresh CLI installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). All three are set up with the legacy `typo3cms install:setup` from [TYPO3 Console](https://github.com/TYPO3-Console/typo3_console), which ships with their base distribution anyway.
+
+**They run on PHP 7.4.** Their `typo3/cms-core` requires PHP `^7.2`, so 7.4 is the newest they run on. DDEV still ships that image, but expect your IDE and any modern tooling to complain about the language level.
+
+**9 and 10 still have `PackageStates.php`.** Extensions added with `--require`/`--extension` only become active once that file is regenerated, so the script runs `install:generatepackagestates` before the extension setup. From v11 on, that file is gone.
+
+**TYPO3 9 gets a site config with base `/`.** The `--site-base-url` option only arrived with TYPO3 Console 6 (TYPO3 10); on 9 it aborts the install outright. A base of `/` is fine for an instance reached under a single hostname — adjust it in the backend's *Sites* module if you need an absolute one.
+
+**The extension kickstarter needs 12+.** `--with-git` still versions the whole project on 9, 10 and 11, but the "scaffold a new extension" option is skipped with a note.
