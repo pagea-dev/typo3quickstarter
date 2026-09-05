@@ -1099,7 +1099,7 @@ if [[ ${#COMPOSER_DEV_REQUIREMENTS[@]} -gt 0 ]]; then
 fi
 
 # --- TYPO3 setup (database + admin user + site) -------------------------------
-if [[ "$T3_MAJOR" -eq 11 ]]; then
+if [[ "$T3_MAJOR" -le 11 ]]; then
   # TYPO3 v11's native `typo3 setup` command crashes on fresh CLI installs
   # (GeneralUtility::$container is null when DataHandler touches the reference
   # index while creating the admin user - see https://forge.typo3.org/issues/105452).
@@ -1161,6 +1161,16 @@ if [[ -f "$SETTINGS_FILE" ]]; then
         'trustedHostsPattern' => '.*',"
   SETTINGS_PHP="${SETTINGS_PHP/$SEARCH/$REPLACE}"
   printf '%s\n' "$SETTINGS_PHP" > "$SETTINGS_FILE"
+fi
+# v11 keeps its configuration in public/typo3conf/LocalConfiguration.php - there is
+# no config/system/settings.php yet, so the replace above finds no file and silently
+# does nothing, leaving every request to fail with exactly that error. Write the same
+# setting through typo3-console instead, which ships with the v11 base distribution
+# and already runs the setup step above. --raw is required: without it ddev joins the
+# arguments into a shell command inside the container, where the unquoted '.*' globs
+# to '. ..' and typo3cms aborts with "Too many arguments".
+if [[ "$T3_MAJOR" -le 11 ]]; then
+  ddev exec --raw ./vendor/bin/typo3cms --no-ansi --no-interaction configuration:set SYS/trustedHostsPattern '.*'
 fi
 
 # --- Debug settings ---------------------------------------------------------

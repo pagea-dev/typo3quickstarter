@@ -13,6 +13,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this p
 
 ### Fixed
 
+- `--release=11` produced an instance that answered every request with "The current host header value does not match the configured trusted hosts pattern". TYPO3 11 has no `config/system/settings.php` - it still keeps its configuration in `public/typo3conf/LocalConfiguration.php` - so the step that relaxes `trustedHostsPattern` found no file to edit and quietly did nothing. It is now written through typo3-console for that version line, which ships with the v11 base distribution anyway. Thanks to [@thomasrawiel](https://github.com/thomasrawiel) ([#25](https://github.com/pagea-dev/typo3quickstarter/pull/25), [#23](https://github.com/pagea-dev/typo3quickstarter/issues/23)).
 - `typo3quickstarter uninstall` on a copy with no uninstaller next to it told you to delete the script and nothing else, quietly leaving the `t3quickstarter` alias behind as a symlink pointing at a file that no longer exists. It now lists every symlink in that directory pointing back at the running copy, so the printed commands actually remove all of it.
 
 ### Changed
