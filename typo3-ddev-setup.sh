@@ -35,6 +35,7 @@ VERBOSE=0
 WITH_GIT=0
 XDEBUG=0
 PING=1
+PHPMYADMIN=1
 MODE=""
 COMPOSER_REQUIREMENTS=()
 COMPOSER_DEV_REQUIREMENTS=()
@@ -90,6 +91,9 @@ Options:
   --no-ping               Skip the anonymous usage ping this script sends when it creates an
                           instance. The ping is a bare request to ping.pagea.dev with nothing
                           attached to it, used only to count how often the tool gets used.
+  --no-pma                Skip phpMyAdmin. It is installed by default as a DDEV add-on and
+                          comes up with the instance, reachable on port 8037 and already
+                          logged in - see docs/phpmyadmin.md.
   --c, --clear, --cleanup Interactively pick previously created instances and remove them completely
                           (Docker containers/volumes, DDEV project listing, hosts entry, project directory).
                           Optionally followed by one or more name/ID substrings to only consider
@@ -161,6 +165,10 @@ for arg in "$@"; do
     --no-ping)
       CURRENT_OPTION=""
       PING=0
+      ;;
+    --no-pma)
+      CURRENT_OPTION=""
+      PHPMYADMIN=0
       ;;
     --cleanup|--clear|--c)
       CURRENT_OPTION="cleanup_target"
@@ -876,6 +884,11 @@ if [[ -z "$ADMIN_EMAIL" ]]; then
   ADMIN_EMAIL="admin@${PROJECT_NAME}.ddev.site"
 fi
 
+# The ddev-phpmyadmin add-on exposes the service on 8036 (HTTP) and 8037 (HTTPS)
+# and hands phpMyAdmin the database credentials itself, so this URL opens straight
+# into the database - there is no login screen to get past.
+PHPMYADMIN_URL="https://${PROJECT_NAME}.ddev.site:8037"
+
 PROJECT_DIR="${BASE_PATH%/}/${PROJECT_NAME}"
 
 if [[ -e "$PROJECT_DIR" ]]; then
@@ -972,6 +985,27 @@ if [[ ${#EXTENSION_PATHS[@]} -gt 0 ]]; then
             echo "      - ${EXTENSION_PATHS[$i]}:/mnt/extension-${i}"
         done
     } > .ddev/docker-compose.extensions.yaml
+fi
+
+# --- phpMyAdmin ---------------------------------------------------------------
+# Added here, after 'ddev config' but before the first 'ddev start', so the service
+# comes up together with everything else. Installing an add-on into an already
+# running project only takes effect on the next 'ddev restart' - exactly the detour
+# this is meant to save. Never fatal: the add-on is fetched from GitHub, and an
+# instance without a database GUI is still a perfectly usable instance.
+if [[ "$PHPMYADMIN" -eq 1 ]]; then
+  echo "${C_CYAN}==> Adding phpMyAdmin (skip with --no-pma)${C_RESET}"
+  # 'ddev add-on get' exists since DDEV v1.23.5; older versions - this script asks
+  # for v1.22+ - still carry the since deprecated 'ddev get'.
+  if ddev add-on --help >/dev/null 2>&1; then
+    ADDON_GET=(ddev add-on get)
+  else
+    ADDON_GET=(ddev get)
+  fi
+  if ! "${ADDON_GET[@]}" ddev/ddev-phpmyadmin; then
+    echo "${C_YELLOW}Could not install the phpMyAdmin add-on, continuing without it.${C_RESET}"
+    PHPMYADMIN=0
+  fi
 fi
 
 # Anonymous usage counter: a bare request, nothing attached, response ignored -
@@ -1200,6 +1234,13 @@ Created: $(date '+%Y-%m-%d %H:%M:%S')
 
 Frontend: https://${PROJECT_NAME}.ddev.site/
 Backend:  https://${PROJECT_NAME}.ddev.site/typo3
+CREDS
+
+if [[ "$PHPMYADMIN" -eq 1 ]]; then
+  echo "phpMyAdmin: ${PHPMYADMIN_URL}" >> "$CREDENTIALS_FILE"
+fi
+
+cat >> "$CREDENTIALS_FILE" <<CREDS
 
 Admin user:     ${ADMIN_USER}
 Admin password: ${ADMIN_PASSWORD}
@@ -1325,6 +1366,9 @@ echo "${C_BOLD}Backend:${C_RESET}     https://${PROJECT_NAME}.ddev.site/typo3"
 echo "${C_BOLD}Admin:${C_RESET}       ${ADMIN_USER}"
 echo "${C_BOLD}Password:${C_RESET}    ${ADMIN_PASSWORD}"
 echo "${C_BOLD}Credentials:${C_RESET} ${PROJECT_DIR}/${CREDENTIALS_FILE}"
+if [[ "$PHPMYADMIN" -eq 1 ]]; then
+  echo "${C_BOLD}phpMyAdmin:${C_RESET}  ${PHPMYADMIN_URL} (or 'ddev phpmyadmin' inside the project)"
+fi
 if [[ "$VERBOSE" -eq 1 ]]; then
   echo "${C_BOLD}Verbose log:${C_RESET} ${PROJECT_DIR}/${VERBOSE_LOG}"
 fi

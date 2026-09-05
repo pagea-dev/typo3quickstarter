@@ -141,6 +141,7 @@ Both only apply to a copy installed with `install.sh` — see [docs/installation
 | `--extension=PATH`                                   | Mount and require a local extension for development — see [docs/composer-packages.md](docs/composer-packages.md)                            | — |
 | `--env=KEY=VALUE`                                    | Set environment variables in the web container — see [docs/environment-variables.md](docs/environment-variables.md)                         | — |
 | `--xdebug`                                           | Enable Xdebug for PHP step debugging from the first start — see [docs/xdebug.md](docs/xdebug.md)                                            | off |
+| `--no-pma`                                           | Skip phpMyAdmin, which is installed by default — see [docs/phpmyadmin.md](docs/phpmyadmin.md)                                               | off |
 | `--list`                                             | List all instances this script created — see [docs/instances.md](docs/instances.md)                                                         | — |
 | `--cleanup`, `--clear`, `--c` [TARGET...]            | Interactively remove previously created instances, optionally narrowed down to name/ID matches — see [docs/instances.md](docs/instances.md) | — |
 | `-v`, `--verbose`                                    | Also write the full console output to `verbose.log` — see [docs/verbose-logging.md](docs/verbose-logging.md)                                | — |
@@ -187,6 +188,7 @@ Pick option 2 when asked, follow the kickstarter's prompts, and you'll have a wo
 - [docs/backend-users.md](docs/backend-users.md) — the admin backend user
 - [docs/composer-packages.md](docs/composer-packages.md) — extra Composer packages via `--require`, `--require-dev` and local extension development via `--extension`
 - [docs/xdebug.md](docs/xdebug.md) — `--xdebug`: PHP step debugging, toggling Xdebug afterwards, PhpStorm/VS Code setup
+- [docs/phpmyadmin.md](docs/phpmyadmin.md) — the phpMyAdmin every instance gets, and `--no-pma` to leave it out
 - [docs/environment-variables.md](docs/environment-variables.md) — `--env`: custom environment variables in the web container
 - [docs/development-settings.md](docs/development-settings.md) — the always-on extras every instance gets: Scheduler/Extensions core extensions, `TYPO3_CONTEXT=Development`, debug settings
 - [docs/with-git.md](docs/with-git.md) — `--with-git`: version the whole project or scaffold and version a new extension
