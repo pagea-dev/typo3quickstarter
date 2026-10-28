@@ -136,6 +136,8 @@ Both only apply to a copy installed with `install.sh` — see [docs/installation
 | Flag                                                 | Description                                                                                                                                 | Default |
 |---|---|---|
 | `-r=N`, `--release=N`                                | TYPO3 version to install — see [docs/versions.md](docs/versions.md)                                                                         | highest supported |
+| `--php-version=X.Y`                                  | PHP version for the web container — see [docs/versions.md](docs/versions.md#choosing-php-and-the-database)                                  | per release line |
+| `--database=TYPE:VER`                                | Database server, `mariadb:<version>` or `mysql:<version>` — see [docs/versions.md](docs/versions.md#choosing-php-and-the-database)          | DDEV's default |
 | `--name=NAME`                                        | DDEV project name                                                                                                                           | auto-generated, e.g. `typo3-v13-101` |
 | `--path=DIR`                                         | Where the project folder is created (also used by `--cleanup`)                                                                              | current directory |
 | `--admin-user`, `--admin-password`, `--admin-email`  | Admin backend user — see [docs/backend-users.md](docs/backend-users.md)                                                                     | `admin` / random / `admin@<project>.ddev.site` |

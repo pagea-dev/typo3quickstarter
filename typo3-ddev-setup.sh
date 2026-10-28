@@ -47,6 +47,8 @@ ok()   { echo "${C_GREEN}$*${C_RESET}"; }
 T3_VERSION=""
 PROJECT_NAME=""
 BASE_PATH="."
+PHP_VERSION_OVERRIDE=""
+DATABASE=""
 ADMIN_USER="admin"
 ADMIN_PASSWORD=""
 ADMIN_EMAIL=""
@@ -90,6 +92,11 @@ Options:
                           see docs/versions.md.
                           15 installs the unreleased development branch and is never the default;
                           it cannot be pinned, since it has no releases yet.
+  --php-version=X.Y       PHP version for the web container (default: the one picked for the
+                          release line - see docs/versions.md). Not checked against what that
+                          TYPO3 version supports; Composer refuses an unsuitable one.
+  --database=TYPE:VER     Database server, mariadb:<version> or mysql:<version>, same values as
+                          'ddev config --database' (default: DDEV's own default).
   --name=NAME             DDEV project name (default: auto-generated, e.g. typo3-v12-101)
   --path=DIR              Directory the project folder is created in / scanned in for --cleanup (default: current dir)
   --admin-user=USER       Backend admin username (default: admin)
@@ -154,6 +161,14 @@ for arg in "$@"; do
     --path=*)
       CURRENT_OPTION=""
       BASE_PATH="${arg#*=}"
+      ;;
+    --php-version=*)
+      CURRENT_OPTION=""
+      PHP_VERSION_OVERRIDE="${arg#*=}"
+      ;;
+    --database=*)
+      CURRENT_OPTION=""
+      DATABASE="${arg#*=}"
       ;;
     --admin-user=*)
       CURRENT_OPTION=""
@@ -287,6 +302,17 @@ for i in "${!EXTENSION_PATHS[@]}"; do
   EXTENSION_PATHS[$i]="$(realpath "${EXTENSION_PATHS[$i]}")"
   [[ -f "${EXTENSION_PATHS[$i]}/composer.json" ]] || die "Extension does not contain a composer.json: ${EXTENSION_PATHS[$i]}"
 done
+
+# --- check --php-version / --database ----------------------------------------
+# Only the format - whether DDEV has that exact image is left to 'ddev config'.
+if [[ -n "$PHP_VERSION_OVERRIDE" ]] && [[ ! "$PHP_VERSION_OVERRIDE" =~ ^[0-9]+\.[0-9]+$ ]]; then
+  die "Error: --php-version must look like 8.3."
+fi
+# PostgreSQL is left out on purpose: the setup step hardcodes the mysqli driver and
+# the collation fix is MySQL/MariaDB syntax.
+if [[ -n "$DATABASE" ]] && [[ ! "$DATABASE" =~ ^(mariadb|mysql):[0-9]+(\.[0-9]+)?$ ]]; then
+  die "Error: --database must be mariadb:<version> or mysql:<version>, e.g. --database=mysql:8.0."
+fi
 
 # --- check --env values ------------------------------------------------------
 for i in "${!ENV_VARS[@]}"; do
@@ -969,6 +995,10 @@ case "$T3_MAJOR" in
     die "Error: TYPO3 version '$T3_VERSION' is not supported yet (released: ${SUPPORTED_VERSIONS[*]}, pre-release: ${PRERELEASE_VERSIONS[*]})."
     ;;
 esac
+if [[ -n "$PHP_VERSION_OVERRIDE" ]]; then
+  PHP_VERSION="$PHP_VERSION_OVERRIDE"
+  step "Using PHP ${PHP_VERSION} (--php-version) instead of the release line's default"
+fi
 
 # Refuse now rather than after a several-minute install - the kickstarter has no
 # release for anything below TYPO3 12.
@@ -1103,6 +1133,7 @@ DDEV_CONFIG_ARGS=(
   --php-version="$PHP_VERSION"
   --web-environment-add="$WEB_ENVIRONMENT"
 )
+[[ -n "$DATABASE" ]] && DDEV_CONFIG_ARGS+=(--database="$DATABASE")
 
 # Xdebug ships with DDEV but is off by default, since it slows down every single
 # request - keep that default and only turn it on when asked, but do it here at
@@ -1205,14 +1236,17 @@ ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}
 if [[ "$IS_PRERELEASE" -eq 1 ]]; then
   ddev composer config minimum-stability dev
   ddev composer config prefer-stable true
-  # The base distribution's main branch still carries "config.platform.php: 8.2.0"
-  # from the 14 line, while the cms-core it pulls in already requires ^8.5. That
-  # override wins over the PHP actually installed, so Composer rejects its own
-  # packages ("your php version (8.2.0; overridden via config.platform, actual:
-  # 8.5.7)"). Dropping it lets Composer see the container's real PHP - which is
-  # the version this script picked for the release anyway.
-  ddev composer config --unset platform.php
 fi
+
+# Several base distributions pin "config.platform.php" below the PHP the container
+# runs (9/10: 7.2, 11: 7.4.1, main/15: 8.2.0 while its cms-core needs ^8.5). That
+# override wins over the PHP actually installed, so Composer resolves everything
+# against it and refuses packages that would install fine - on 15 even its own
+# ("your php version (8.2.0; overridden via config.platform, actual: 8.5.7)"),
+# on the old lines tooling like Rector/PHPStan, and it would make --php-version
+# meaningless. Dropping it lets Composer see the container's real PHP. A no-op
+# on the distributions that carry no pin.
+ddev composer config --unset platform.php
 
 # The 9.5 and 10.4 base distributions ship an allow-plugins list written before
 # typo3-console had to be on it, and Composer 2.2+ does not simply skip a plugin
