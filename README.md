@@ -128,6 +128,8 @@ To clean up this instance: typo3quickstarter --c 101
 |---|---|
 | `typo3quickstarter update` | Check GitHub for a newer release and install it after asking |
 | `typo3quickstarter uninstall` | Remove the installed command, its alias and the uninstaller |
+<img width="958" height="357" alt="image" src="https://github.com/user-attachments/assets/da7fb774-01ac-4a6d-bad3-9307ce4dbb08" />
+
 
 Both only apply to a copy installed with `install.sh` — see [docs/installation.md](docs/installation.md). Every normal run also checks for a newer release and prints a one-line notice under the banner if there is one; it never asks or installs anything, and `TYPO3QUICKSTARTER_NO_UPDATE_CHECK=1` turns it off.
 
