@@ -136,6 +136,8 @@ Both only apply to a copy installed with `install.sh` — see [docs/installation
 | Flag                                                 | Description                                                                                                                                 | Default |
 |---|---|---|
 | `-r=N`, `--release=N`                                | TYPO3 version to install — see [docs/versions.md](docs/versions.md)                                                                         | highest supported |
+| `--php-version=X.Y`                                  | PHP version for the web container — see [docs/versions.md](docs/versions.md#choosing-php-and-the-database)                                  | per release line |
+| `--database=TYPE:VER`                                | Database server, `mariadb:<version>` or `mysql:<version>` — see [docs/versions.md](docs/versions.md#choosing-php-and-the-database)          | DDEV's default |
 | `--name=NAME`                                        | DDEV project name                                                                                                                           | auto-generated, e.g. `typo3-v13-101` |
 | `--path=DIR`                                         | Where the project folder is created (also used by `--cleanup`)                                                                              | current directory |
 | `--admin-user`, `--admin-password`, `--admin-email`  | Admin backend user — see [docs/backend-users.md](docs/backend-users.md)                                                                     | `admin` / random / `admin@<project>.ddev.site` |
@@ -149,6 +151,7 @@ Both only apply to a copy installed with `install.sh` — see [docs/installation
 | `--cleanup`, `--clear`, `--c` [TARGET...]            | Interactively remove previously created instances, optionally narrowed down to name/ID matches — see [docs/instances.md](docs/instances.md) | — |
 | `-v`, `--verbose`                                    | Also write the full console output to `verbose.log` — see [docs/verbose-logging.md](docs/verbose-logging.md)                                | — |
 | `--with-git`                                         | After setup, ask whether to `git init` the whole project or scaffold and version a new extension — see [docs/with-git.md](docs/with-git.md) | — |
+| `--create-extension`                                 | After setup, run the extension kickstarter and install the new extension from `packages/` — see [docs/create-extension.md](docs/create-extension.md) | — |
 | `-h`, `--help`                                       | Show usage                                                                                                                                  | — |
 | `--version`                                          | Show the script's own version — see [docs/information.md](docs/information.md)                                                              | — |
 
@@ -195,6 +198,7 @@ Pick option 2 when asked, follow the kickstarter's prompts, and you'll have a wo
 - [docs/environment-variables.md](docs/environment-variables.md) — `--env`: custom environment variables in the web container
 - [docs/development-settings.md](docs/development-settings.md) — the always-on extras every instance gets: Scheduler/Extensions core extensions, `TYPO3_CONTEXT=Development`, debug settings
 - [docs/with-git.md](docs/with-git.md) — `--with-git`: version the whole project or scaffold and version a new extension
+- [docs/create-extension.md](docs/create-extension.md) — `--create-extension`: scaffold a new extension with the kickstarter, without git
 - [docs/instances.md](docs/instances.md) — listing (`--list`) and removing (`--cleanup`) instances
 - [docs/verbose-logging.md](docs/verbose-logging.md) — `--verbose`/`verbose.log`
 - [docs/information.md](docs/information.md) — the script's own `--version` and the release process

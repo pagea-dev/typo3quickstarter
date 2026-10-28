@@ -29,6 +29,8 @@ Currently supported major versions:
 
 Only one release line is wired up per major version — extending the version map to a new TYPO3 release is a one-line addition in the script.
 
+The PHP column is only the default - see [Choosing PHP and the database](#choosing-php-and-the-database).
+
 > Project folder/DDEV names are always based on the major version (e.g. `typo3-v12-101`), even if you pinned an exact patch release with `--release=12.4.20`.
 
 ## Pre-releases (TYPO3 15)
@@ -57,16 +59,39 @@ Three things follow from it being a development branch:
 The script fixes up two things in the scaffolded `composer.json` before installing:
 
 - **`minimum-stability: dev` plus `prefer-stable: true`.** The base distribution's `main` branch requires every `typo3/cms-*` at `dev-main` but sets no `minimum-stability` of its own, so anything added afterwards — the core extras the script requires, and your own `--require` packages — would be judged against the default `stable` and refused. `prefer-stable` keeps unrelated third-party packages on their stable releases regardless.
-- **`config.platform.php` is removed.** That branch still pins it to `8.2.0`, left over from the 14 line, while the `cms-core` it pulls in already requires `^8.5`. The override wins over the PHP that's actually installed, so Composer ends up rejecting its own packages:
+- **`config.platform.php` is removed** - as on every version, see [The `config.platform.php` pin](#the-configplatformphp-pin). On this branch it matters most: it still pins `8.2.0`, left over from the 14 line, while the `cms-core` it pulls in already requires `^8.5`, so Composer ends up rejecting its own packages:
 
   ```
   typo3/cms-core[dev-main, 15.0.x-dev] require php ^8.5 -> your php version
   (8.2.0; overridden via config.platform, actual: 8.5.7) does not satisfy that requirement.
   ```
 
-  Dropping it lets Composer see the container's real PHP — which is the version this script picked for the release anyway.
-
 Once 15.0 is actually released, it moves from the pre-release list into the table above and gets a normal `^15.0` constraint.
+
+## Choosing PHP and the database
+
+```bash
+./typo3-ddev-setup.sh --release=13 --php-version=8.4 --database=mysql:8.0
+```
+
+- **`--php-version=X.Y`** replaces the PHP from the table above. It is not checked against what that TYPO3 version supports - if it doesn't fit, Composer says so during the install. Your DDEV has to know that PHP version.
+- **`--database=TYPE:VERSION`** picks the database server, with the same values `ddev config --database` takes: `mariadb:<version>` or `mysql:<version>`. Without it you get DDEV's default (currently MariaDB). PostgreSQL isn't offered, since the setup is MySQL/MariaDB-specific.
+
+Only the format is checked up front; whether DDEV has that exact image is up to `ddev config`.
+
+## The `config.platform.php` pin
+
+Several base distributions pin `config.platform.php` below the PHP the container runs:
+
+| `--release` | `config.platform.php` | Default PHP in the container |
+|---|---|---|
+| 9, 10 | `7.2` | 7.4 |
+| 11 | `7.4.1` | 8.1 |
+| 15 | `8.2.0` | 8.5 |
+
+That pin wins over the PHP that's actually installed, so Composer resolves everything against it and refuses packages that would install fine - typically tooling like Rector or PHPStan you'd add to an old instance to plan an upgrade, and it would make `--php-version` pointless. The script removes the pin on every version right after scaffolding, so Composer sees the container's real PHP.
+
+The trade-off: the pin is also upstream's way of keeping dependencies installable on the minimum PHP. Without it, the resulting `composer.lock` may pick versions that need the container's newer PHP - fine for a disposable instance, but not representative of what a production server on the minimum PHP would resolve.
 
 ## Pinning an exact patch release
 
@@ -94,7 +119,7 @@ TYPO3 9.5, 10.4 and 11.5 are all long past end of life. They're here for one rea
 
 **They install differently.** None of them uses TYPO3's own `typo3 setup`: 9 and 10 have no such command at all, and v11's crashes on fresh CLI installs ([TYPO3 Forge #105452](https://forge.typo3.org/issues/105452), closed won't-fix since v11 is EOL). All three are set up with the legacy `typo3cms install:setup` from [TYPO3 Console](https://github.com/TYPO3-Console/typo3_console), which ships with their base distribution anyway.
 
-**They run on PHP 7.4.** Their `typo3/cms-core` requires PHP `^7.2`, so 7.4 is the newest they run on. DDEV still ships that image, but expect your IDE and any modern tooling to complain about the language level.
+**They run on PHP 7.4.** Their `typo3/cms-core` requires PHP `^7.2`, so 7.4 is the newest they run on (9 and 10; 11 defaults to 8.1). DDEV still ships that image, but expect your IDE and any modern tooling to complain about the language level.
 
 **9 and 10 still have `PackageStates.php`.** Extensions added with `--require`/`--extension` only become active once that file is regenerated, so the script runs `install:generatepackagestates` before setting the extensions up (with `extension:setupactive` — TYPO3 Console's own `extension:setup` wants an explicit list of extension keys). From v11 on, that file is gone.
 

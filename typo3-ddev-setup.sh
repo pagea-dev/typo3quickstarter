@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bumped only as part of a GitHub release, not per commit - see CHANGELOG.md.
-SCRIPT_VERSION="0.7.0"
+SCRIPT_VERSION="0.8.0"
 
 # How this script was started, used wherever the output prints a command the user
 # can copy back: run from a checkout that is "./typo3-ddev-setup.sh", but install.sh
@@ -47,6 +47,8 @@ ok()   { echo "${C_GREEN}$*${C_RESET}"; }
 T3_VERSION=""
 PROJECT_NAME=""
 BASE_PATH="."
+PHP_VERSION_OVERRIDE=""
+DATABASE=""
 ADMIN_USER="admin"
 ADMIN_PASSWORD=""
 ADMIN_EMAIL=""
@@ -54,6 +56,7 @@ CLEANUP=0
 LIST=0
 VERBOSE=0
 WITH_GIT=0
+CREATE_EXTENSION=0
 XDEBUG=0
 PING=1
 PHPMYADMIN=1
@@ -89,6 +92,11 @@ Options:
                           see docs/versions.md.
                           15 installs the unreleased development branch and is never the default;
                           it cannot be pinned, since it has no releases yet.
+  --php-version=X.Y       PHP version for the web container (default: the one picked for the
+                          release line - see docs/versions.md). Not checked against what that
+                          TYPO3 version supports; Composer refuses an unsuitable one.
+  --database=TYPE:VER     Database server, mariadb:<version> or mysql:<version>, same values as
+                          'ddev config --database' (default: DDEV's own default).
   --name=NAME             DDEV project name (default: auto-generated, e.g. typo3-v12-101)
   --path=DIR              Directory the project folder is created in / scanned in for --cleanup (default: current dir)
   --admin-user=USER       Backend admin username (default: admin)
@@ -130,6 +138,9 @@ Options:
                           whole project under git version control, or scaffold a brand-new
                           extension under packages/<name> and version that alone instead.
                           See docs/with-git.md.
+  --create-extension      After setup, run the TYPO3 extension kickstarter (needs an interactive
+                          terminal, TYPO3 12+) and copy the new extension to packages/<name>,
+                          registered with Composer. See docs/create-extension.md.
   -h, --help              Show this help
   --version               Show script version
 
@@ -150,6 +161,14 @@ for arg in "$@"; do
     --path=*)
       CURRENT_OPTION=""
       BASE_PATH="${arg#*=}"
+      ;;
+    --php-version=*)
+      CURRENT_OPTION=""
+      PHP_VERSION_OVERRIDE="${arg#*=}"
+      ;;
+    --database=*)
+      CURRENT_OPTION=""
+      DATABASE="${arg#*=}"
       ;;
     --admin-user=*)
       CURRENT_OPTION=""
@@ -206,6 +225,10 @@ for arg in "$@"; do
     --with-git)
       CURRENT_OPTION=""
       WITH_GIT=1
+      ;;
+    --create-extension)
+      CURRENT_OPTION=""
+      CREATE_EXTENSION=1
       ;;
     -h|--help)
       usage
@@ -280,6 +303,17 @@ for i in "${!EXTENSION_PATHS[@]}"; do
   [[ -f "${EXTENSION_PATHS[$i]}/composer.json" ]] || die "Extension does not contain a composer.json: ${EXTENSION_PATHS[$i]}"
 done
 
+# --- check --php-version / --database ----------------------------------------
+# Only the format - whether DDEV has that exact image is left to 'ddev config'.
+if [[ -n "$PHP_VERSION_OVERRIDE" ]] && [[ ! "$PHP_VERSION_OVERRIDE" =~ ^[0-9]+\.[0-9]+$ ]]; then
+  die "Error: --php-version must look like 8.3."
+fi
+# PostgreSQL is left out on purpose: the setup step hardcodes the mysqli driver and
+# the collation fix is MySQL/MariaDB syntax.
+if [[ -n "$DATABASE" ]] && [[ ! "$DATABASE" =~ ^(mariadb|mysql):[0-9]+(\.[0-9]+)?$ ]]; then
+  die "Error: --database must be mariadb:<version> or mysql:<version>, e.g. --database=mysql:8.0."
+fi
+
 # --- check --env values ------------------------------------------------------
 for i in "${!ENV_VARS[@]}"; do
   env_var="${ENV_VARS[$i]}"
@@ -307,6 +341,9 @@ fi
 if [[ "$WITH_GIT" -eq 1 ]]; then
   command -v git >/dev/null 2>&1 || die "Error: --with-git needs git, which is not installed or not in PATH."
   [[ -t 0 ]] || die "Error: --with-git needs an interactive terminal to ask what to version."
+fi
+if [[ "$CREATE_EXTENSION" -eq 1 ]]; then
+  [[ -t 0 ]] || die "Error: --create-extension needs an interactive terminal for the kickstarter's prompts."
 fi
 
 PASSWORD_CHARS_UPPER='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -402,6 +439,73 @@ register_local_package() {
   local repo_name="$1" path="$2" package="$3"
   ddev composer config "repositories.${repo_name}" path "$path"
   ddev composer require "${package}:@dev" "${COMPOSER_ARGS[@]}"
+}
+
+# Lists the extension directories the kickstarter has written so far. It always
+# exports into public/typo3temp/ - "ext-kickstarter/" up to 0.3.4 (the releases
+# TYPO3 12 and early 13 resolve to), "kickstarter/" from 0.3.5 on.
+kickstarter_exports() {
+  find public/typo3temp/kickstarter public/typo3temp/ext-kickstarter \
+    -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort || true
+}
+
+# Installs friendsoftypo3/kickstarter, hands the terminal to its make:extension
+# wizard, then copies the result from typo3temp/ (regenerable scratch space) to
+# packages/<key> and registers it with Composer. On success NEW_EXT_DIR holds that
+# packages/ path; otherwise it warns and returns 1. Shared by --create-extension
+# and --with-git option 2. Both call it as "run_kickstarter || ...", which turns
+# off set -e inside, so every step that can fail is checked by hand.
+NEW_EXT_DIR=""
+run_kickstarter() {
+  local exports_before exports_after created target package_name
+
+  step "Installing friendsoftypo3/kickstarter (dev dependency)"
+  if ! ddev composer require --dev friendsoftypo3/kickstarter "${COMPOSER_ARGS[@]}"; then
+    warn "Could not install friendsoftypo3/kickstarter, skipping."
+    return 1
+  fi
+  extension_setup
+
+  # No flag/non-interactive mode exists for make:extension - it only knows how to
+  # ask. Diff its export directory before and after to find what it created, since
+  # there's no other way to learn the extension key it was given.
+  exports_before="$(kickstarter_exports)"
+  step "Launching the TYPO3 extension kickstarter - follow the prompts"
+  if ! ddev exec ./vendor/bin/typo3 make:extension; then
+    warn "Kickstarter run failed or was cancelled."
+    return 1
+  fi
+  exports_after="$(kickstarter_exports)"
+  created="$(comm -13 <(echo "$exports_before") <(echo "$exports_after"))"
+
+  if [[ -z "$created" ]] || [[ "$(wc -l <<< "$created")" -ne 1 ]]; then
+    warn "Could not tell which extension the kickstarter created - check public/typo3temp/ and copy it to packages/ yourself."
+    return 1
+  fi
+
+  target="packages/$(basename "$created")"
+  if [[ -e "$target" ]]; then
+    warn "${target} already exists - the new extension stays in ${created}."
+    return 1
+  fi
+  if ! { mkdir -p packages && cp -R "$created" "$target"; }; then
+    warn "Could not copy ${created} to ${target}."
+    return 1
+  fi
+  NEW_EXT_DIR="$target"
+
+  # Same registration --extension does for a mounted extension: a Composer path
+  # repository, then require it at :@dev.
+  package_name="$(composer_package_name "${target}/composer.json")" || package_name=""
+  if [[ -z "$package_name" ]]; then
+    warn "${target}/composer.json has no package name - copied, but not registered with Composer."
+  elif step "Registering ${target} (${package_name}) with Composer" \
+      && register_local_package "$(basename "$target")" "$target" "$package_name" \
+      && extension_setup; then
+    ok "Extension created at ${PROJECT_DIR}/${target} and installed"
+  else
+    warn "Extension copied to ${target}, but registering it with Composer failed - see the output above."
+  fi
 }
 
 # --- cleanup mode -------------------------------------------------------------
@@ -891,6 +995,16 @@ case "$T3_MAJOR" in
     die "Error: TYPO3 version '$T3_VERSION' is not supported yet (released: ${SUPPORTED_VERSIONS[*]}, pre-release: ${PRERELEASE_VERSIONS[*]})."
     ;;
 esac
+if [[ -n "$PHP_VERSION_OVERRIDE" ]]; then
+  PHP_VERSION="$PHP_VERSION_OVERRIDE"
+  step "Using PHP ${PHP_VERSION} (--php-version) instead of the release line's default"
+fi
+
+# Refuse now rather than after a several-minute install - the kickstarter has no
+# release for anything below TYPO3 12.
+if [[ "$CREATE_EXTENSION" -eq 1 ]] && [[ "$T3_MAJOR" -le 11 ]]; then
+  die "Error: --create-extension needs TYPO3 12+ (the extension kickstarter has no release for TYPO3 ${T3_MAJOR})."
+fi
 
 # typo3/cms-base-distribution itself only gets a handful of releases (it just bundles
 # the real typo3/cms-* packages via "$COMPOSER_CONSTRAINT"), so it can't be pinned to
@@ -1019,6 +1133,7 @@ DDEV_CONFIG_ARGS=(
   --php-version="$PHP_VERSION"
   --web-environment-add="$WEB_ENVIRONMENT"
 )
+[[ -n "$DATABASE" ]] && DDEV_CONFIG_ARGS+=(--database="$DATABASE")
 
 # Xdebug ships with DDEV but is off by default, since it slows down every single
 # request - keep that default and only turn it on when asked, but do it here at
@@ -1121,14 +1236,17 @@ ddev composer create-project "typo3/cms-base-distribution:${COMPOSER_CONSTRAINT}
 if [[ "$IS_PRERELEASE" -eq 1 ]]; then
   ddev composer config minimum-stability dev
   ddev composer config prefer-stable true
-  # The base distribution's main branch still carries "config.platform.php: 8.2.0"
-  # from the 14 line, while the cms-core it pulls in already requires ^8.5. That
-  # override wins over the PHP actually installed, so Composer rejects its own
-  # packages ("your php version (8.2.0; overridden via config.platform, actual:
-  # 8.5.7)"). Dropping it lets Composer see the container's real PHP - which is
-  # the version this script picked for the release anyway.
-  ddev composer config --unset platform.php
 fi
+
+# Several base distributions pin "config.platform.php" below the PHP the container
+# runs (9/10: 7.2, 11: 7.4.1, main/15: 8.2.0 while its cms-core needs ^8.5). That
+# override wins over the PHP actually installed, so Composer resolves everything
+# against it and refuses packages that would install fine - on 15 even its own
+# ("your php version (8.2.0; overridden via config.platform, actual: 8.5.7)"),
+# on the old lines tooling like Rector/PHPStan, and it would make --php-version
+# meaningless. Dropping it lets Composer see the container's real PHP. A no-op
+# on the distributions that carry no pin.
+ddev composer config --unset platform.php
 
 # The 9.5 and 10.4 base distributions ship an allow-plugins list written before
 # typo3-console had to be on it, and Composer 2.2+ does not simply skip a plugin
@@ -1351,6 +1469,14 @@ if [[ "$VERBOSE" -eq 1 ]]; then
   secure_file "$VERBOSE_LOG"
 fi
 
+# --- --create-extension: scaffold a new extension with the kickstarter --------
+# Runs before --with-git, so option 1 commits the new extension along with the
+# project and option 2 versions it without asking the wizard a second time.
+if [[ "$CREATE_EXTENSION" -eq 1 ]]; then
+  echo
+  run_kickstarter || true
+fi
+
 # --- --with-git: optional version control setup -------------------------------
 if [[ "$WITH_GIT" -eq 1 ]]; then
   echo
@@ -1382,68 +1508,30 @@ if [[ "$WITH_GIT" -eq 1 ]]; then
       warn "Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged."
     fi
   elif [[ "$GIT_CHOICE" == "2" ]]; then
-    # friendsoftypo3/kickstarter has no release for anything below TYPO3 12 (0.1.x
-    # targets ^12.4.8, up to 0.4.x/main targeting ^14) - see
-    # https://github.com/FriendsOfTYPO3/kickstarter.
-    if [[ "$T3_MAJOR" -le 11 ]]; then
+    if [[ -n "$NEW_EXT_DIR" ]]; then
+      # --create-extension already ran the kickstarter - version that extension
+      # instead of making the user go through the wizard a second time.
+      :
+    elif [[ "$T3_MAJOR" -le 11 ]]; then
+      # friendsoftypo3/kickstarter has no release for anything below TYPO3 12 (0.1.x
+      # targets ^12.4.8, up to 0.4.x/main targeting ^14) - see
+      # https://github.com/FriendsOfTYPO3/kickstarter.
       warn "--with-git: the TYPO3 extension kickstarter needs TYPO3 12+ (this instance is TYPO3 ${T3_MAJOR}), skipping."
     else
-      step "Installing friendsoftypo3/kickstarter (dev dependency)"
-      if ddev composer require --dev friendsoftypo3/kickstarter "${COMPOSER_ARGS[@]}"; then
-        extension_setup
+      run_kickstarter || warn "--with-git: no new extension, nothing to put under git."
+    fi
 
-        mkdir -p packages
-        # Point the kickstarter at packages/ instead of its typo3temp/ext-kickstarter/
-        # default - its own README recommends this for Composer setups, since
-        # typo3temp/ is regenerable/untracked scratch space, not real project code.
-        # Extension key is "ext_kickstarter", not "kickstarter" - the composer.json
-        # inside the friendsoftypo3/kickstarter package itself still says
-        # stefanfroemken/ext-kickstarter (its pre-adoption name).
-        ddev exec --raw php -r '
-            $file = $argv[1];
-            $config = require $file;
-            $config["EXTENSIONS"]["ext_kickstarter"]["exportDirectory"] = "packages/";
-            file_put_contents($file, "<?php\nreturn " . var_export($config, true) . ";\n");
-        ' "$SETTINGS_FILE"
-
-        # No flag/non-interactive mode exists for make:extension - it only knows
-        # how to ask. Diff packages/ before and after to find what it created,
-        # since there's no other way to learn the extension key it was given.
-        EXT_DIRS_BEFORE="$(find packages -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)"
-        step "Launching the TYPO3 extension kickstarter - follow the prompts"
-        if ddev exec ./vendor/bin/typo3 make:extension; then
-          EXT_DIRS_AFTER="$(find packages -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)"
-          NEW_EXT_DIR="$(comm -13 <(echo "$EXT_DIRS_BEFORE") <(echo "$EXT_DIRS_AFTER"))"
-
-          if [[ -z "$NEW_EXT_DIR" ]] || [[ "$(wc -l <<< "$NEW_EXT_DIR")" -ne 1 ]]; then
-            warn "Could not tell which extension the kickstarter created - nothing to put under git, check packages/ and run 'git init' there yourself if you want one."
-          else
-            # Same registration --extension already does for a mounted extension:
-            # a Composer path repository, then require it at :@dev.
-            package_name="$(composer_package_name "${NEW_EXT_DIR}/composer.json")"
-            if [[ -n "$package_name" ]]; then
-              step "Registering ${NEW_EXT_DIR} (${package_name}) with Composer"
-              register_local_package "$(basename "$NEW_EXT_DIR")" "$NEW_EXT_DIR" "$package_name"
-              extension_setup
-            fi
-
-            (
-              cd "$NEW_EXT_DIR"
-              git init >/dev/null
-              git add -A
-              if git commit -m "Initial commit" >/dev/null 2>&1; then
-                ok "Git repository initialized and committed at ${PROJECT_DIR}/${NEW_EXT_DIR}"
-              else
-                warn "Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged."
-              fi
-            )
-          fi
+    if [[ -n "$NEW_EXT_DIR" ]]; then
+      (
+        cd "$NEW_EXT_DIR"
+        git init >/dev/null
+        git add -A
+        if git commit -m "Initial commit" >/dev/null 2>&1; then
+          ok "Git repository initialized and committed at ${PROJECT_DIR}/${NEW_EXT_DIR}"
         else
-          warn "Kickstarter run failed or was cancelled - nothing to put under git."
+          warn "Git repository initialized, but the initial commit failed - configure git's user.name/user.email if you want one. Changes are staged."
         fi
-      else
-        warn "Could not install friendsoftypo3/kickstarter, skipping."
-      fi
+      )
     fi
   else
     warn "--with-git: invalid choice, skipping."
